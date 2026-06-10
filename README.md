@@ -3,6 +3,9 @@ ai-fitness-expert-coach agent , using Vercel AI SDK v6 for (OpenAI/Gemini/Claude
 
 Elite fitness-coach agent API. Fastify 5 + TypeScript (strict) + AI SDK 6.
 
+https://ai-sdk.dev
+
+
 Verified against: `ai@6.0.x`, `fastify@5.8.x`, `zod@4.x`,
 `fastify-type-provider-zod@6.x`, `@fastify/helmet@13`, `@fastify/cors@11`,
 `@fastify/rate-limit@10`, Node 22. Typecheck + 18 tests pass; build smoke-tested.
