@@ -39,3 +39,33 @@ export function createCoachPlanAgent(deps: CoachAgentDeps, safetyFlags: string[]
   });
 }
 export type CoachPlanAgent = ReturnType<typeof createCoachPlanAgent>;
+
+
+/*
+export function createCoachChatAgent(deps: CoachAgentDeps) {
+  const isReasoningModel = deps.model.modelId.includes('gemini-3.5') || deps.model.modelId.includes('gpt-5.5');
+
+  return new ToolLoopAgent({
+    model: deps.model,
+    instructions: COACH_SYSTEM_PROMPT,
+    tools: createCoachTools(deps),
+    stopWhen: stepCountIs(8),
+    // Strip temperature to support next-gen reasoning options natively
+    ...(isReasoningModel ? {} : { temperature: 0.3 }) 
+  });
+}
+
+export function createCoachPlanAgent(deps: CoachAgentDeps, safetyFlags: string[]) {
+  const isReasoningModel = deps.model.modelId.includes('gemini-3.5') || deps.model.modelId.includes('gpt-5.5');
+
+  return new ToolLoopAgent({
+    model: deps.model,
+    instructions: buildPlanInstructions(safetyFlags),
+    tools: createCoachTools(deps),
+    output: Output.object({ schema: coachOutputSchema }),
+    stopWhen: stepCountIs(10),
+    ...(isReasoningModel ? {} : { temperature: 0.2 })
+  });
+}
+
+*/

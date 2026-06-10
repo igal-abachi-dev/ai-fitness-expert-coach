@@ -8,9 +8,11 @@ const envSchema = z.object({
     .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace'])
     .default('info'),
 
+  GOOGLE_GENERATIVE_AI_API_KEY: z.string().min(1, 'GOOGLE_GENERATIVE_AI_API_KEY is required'),
+  XAI_API_KEY: z.string().min(1, 'XAI_API_KEY is required'),
   OPENAI_API_KEY: z.string().min(1, 'OPENAI_API_KEY is required'),
   ANTHROPIC_API_KEY: z.string().min(1, 'ANTHROPIC_API_KEY is required'),
-  AGENT_MODEL: z.string().default('claude-sonnet-4-5'),
+  AGENT_MODEL: z.string().default('claude-opus-4-8'),
 
   /** Exact frontend origin; '*' is rejected in production (see superRefine). */
   CORS_ORIGIN: z.string().default('http://localhost:5173'),
