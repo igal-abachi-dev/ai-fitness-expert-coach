@@ -8,6 +8,7 @@ import {
   validatorCompiler,
   type ZodTypeProvider,
 } from 'fastify-type-provider-zod';
+import type { ProviderOptions } from '@ai-sdk/provider-utils';
 import type { LanguageModel } from 'ai';
 import type { Env } from './config/env.js';
 import { createCoachChatAgent } from './features/coach/coach.agent.js';
@@ -18,6 +19,8 @@ import { healthRoutes } from './features/health/health.routes.js';
 export interface AppDeps {
   env: Env;
   model: LanguageModel;
+  providerOptions?: ProviderOptions;
+  supportsTemperature?: boolean;
   exerciseLibrary: ExerciseLibrary;
 }
 
@@ -26,7 +29,7 @@ export interface AppDeps {
  * app but never reads process.env, never listens, never touches the network.
  * Tests inject a MockLanguageModelV3; server.ts injects the real provider.
  */
-export function buildApp({ env, model, exerciseLibrary }: AppDeps) {
+export function buildApp({ env, model, providerOptions, supportsTemperature, exerciseLibrary }: AppDeps) {
   const app = Fastify({
     logger: {
       level: env.LOG_LEVEL,
@@ -68,7 +71,12 @@ export function buildApp({ env, model, exerciseLibrary }: AppDeps) {
 
   // Long-lived chat agent (instructions are static). The plan agent is built
   // per-request inside the route because safety flags are injected.
-  const chatAgent = createCoachChatAgent({ model, exerciseLibrary });
+  const chatAgent = createCoachChatAgent({
+    model,
+    exerciseLibrary,
+    ...(providerOptions !== undefined ? { providerOptions } : {}),
+    ...(supportsTemperature !== undefined ? { supportsTemperature } : {}),
+  });
 
   // Health is unlimited so platform probes (Render/Fly/Railway) are never
   // throttled. Rate limiting is scoped to the expensive coach endpoints.
@@ -80,7 +88,13 @@ export function buildApp({ env, model, exerciseLibrary }: AppDeps) {
         timeWindow: '1m',
       });
       await coach.register(
-        coachRoutes({ model, exerciseLibrary, chatAgent }),
+        coachRoutes({
+          model,
+          exerciseLibrary,
+          chatAgent,
+          ...(providerOptions !== undefined ? { providerOptions } : {}),
+          ...(supportsTemperature !== undefined ? { supportsTemperature } : {}),
+        }),
       );
     },
     { prefix: '/v1/coach' },

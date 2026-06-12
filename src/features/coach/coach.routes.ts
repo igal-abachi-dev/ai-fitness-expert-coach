@@ -6,6 +6,7 @@ import {
   validateUIMessages,
   type LanguageModel,
 } from 'ai';
+import type { ProviderOptions } from '@ai-sdk/provider-utils';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { abortOnClientDisconnect } from '../../lib/http/abort-on-client-disconnect.js';
@@ -25,6 +26,8 @@ import type { ToolDeps } from './tools/index.js';
 
 export interface CoachRoutesDeps extends ToolDeps {
   model: LanguageModel;
+  providerOptions?: ProviderOptions;
+  supportsTemperature?: boolean;
   chatAgent: CoachChatAgent;
 }
 
@@ -59,7 +62,16 @@ export function coachRoutes(deps: CoachRoutesDeps): FastifyPluginAsyncZod {
         // 1. Deterministic pre-check; flags are injected into instructions.
         const flags = detectSafetyFlags(assessment);
         const planAgent = createCoachPlanAgent(
-          { model: deps.model, exerciseLibrary: deps.exerciseLibrary },
+          {
+            model: deps.model,
+            exerciseLibrary: deps.exerciseLibrary,
+            ...(deps.providerOptions !== undefined
+              ? { providerOptions: deps.providerOptions }
+              : {}),
+            ...(deps.supportsTemperature !== undefined
+              ? { supportsTemperature: deps.supportsTemperature }
+              : {}),
+          },
           flags,
         );
 

@@ -1,5 +1,18 @@
 import { z } from 'zod';
 
+/** Non-empty API key, or undefined when unset / blank. */
+const optionalApiKey = z
+  .string()
+  .optional()
+  .transform((value) => (value?.trim() ? value.trim() : undefined));
+
+const API_KEY_FIELDS = [
+  'GOOGLE_GENERATIVE_AI_API_KEY',
+  'XAI_API_KEY',
+  'OPENAI_API_KEY',
+  'ANTHROPIC_API_KEY',
+] as const;
+
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   HOST: z.string().default('0.0.0.0'),
@@ -8,11 +21,15 @@ const envSchema = z.object({
     .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace'])
     .default('info'),
 
-  GOOGLE_GENERATIVE_AI_API_KEY: z.string().min(1, 'GOOGLE_GENERATIVE_AI_API_KEY is required'),
-  XAI_API_KEY: z.string().min(1, 'XAI_API_KEY is required'),
-  OPENAI_API_KEY: z.string().min(1, 'OPENAI_API_KEY is required'),
-  ANTHROPIC_API_KEY: z.string().min(1, 'ANTHROPIC_API_KEY is required'),
-  AGENT_MODEL: z.string().default('claude-opus-4-8'),
+  GOOGLE_GENERATIVE_AI_API_KEY: optionalApiKey,
+  XAI_API_KEY: optionalApiKey,
+  OPENAI_API_KEY: optionalApiKey,
+  ANTHROPIC_API_KEY: optionalApiKey,
+  /**
+   * Provider-prefixed id (`anthropic/claude-opus-4-8`) or bare id when unambiguous
+   * (`claude-opus-4-8`, `gemini-2.5-flash`, `grok-4.3`, `gpt-5.2`).
+   */
+  AGENT_MODEL: z.string().default('anthropic/claude-opus-4-8'),
 
   /** Exact frontend origin; '*' is rejected in production (see superRefine). */
   CORS_ORIGIN: z.string().default('http://localhost:5173'),
@@ -24,6 +41,16 @@ const envSchema = z.object({
       code: 'custom',
       path: ['CORS_ORIGIN'],
       message: 'CORS_ORIGIN must not be "*" in production',
+    });
+  }
+
+  const hasAnyApiKey = API_KEY_FIELDS.some((field) => env[field] !== undefined);
+  if (!hasAnyApiKey) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['ANTHROPIC_API_KEY'],
+      message:
+        'At least one of GOOGLE_GENERATIVE_AI_API_KEY, XAI_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY is required',
     });
   }
 });

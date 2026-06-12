@@ -5,13 +5,19 @@ import {
   createInMemoryExerciseLibrary,
   seedExercises,
 } from './features/coach/tools/exercise-library.tool.js';
-import { createAgentModel } from './lib/ai/models.js';
+import { createAgentModelBundle } from './lib/ai/models.js';
 
 const env = loadEnv();
 
+const agentModel = createAgentModelBundle(env);
+
 const app = buildApp({
   env,
-  model: createAgentModel(env),
+  model: agentModel.model,
+  supportsTemperature: agentModel.supportsTemperature,
+  ...(agentModel.providerOptions !== undefined
+    ? { providerOptions: agentModel.providerOptions }
+    : {}),
   // Swap for a DB-backed implementation when the catalogue grows:
   exerciseLibrary: createInMemoryExerciseLibrary(seedExercises),
 });
