@@ -1,0 +1,32 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+# Connect this repo in the Render dashboard; secrets marked sync: false are set there.
+services:
+  - type: web
+    name: ai-fitness-expert-coach
+    runtime: node
+    plan: starter
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: LOG_LEVEL
+        value: info
+      - key: AGENT_MODEL
+        value: anthropic/claude-opus-4-8
+      - key: RATE_LIMIT_MAX
+        value: "30"
+      # Set in the Render dashboard (Environment → Add Secret):
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: GOOGLE_GENERATIVE_AI_API_KEY
+        sync: false
+      - key: XAI_API_KEY
+        sync: false
+      - key: CORS_ORIGIN
+        sync: false

@@ -139,7 +139,7 @@ export function coachRoutes(deps: CoachRoutesDeps): FastifyPluginAsyncZod {
             outputTokens: result.totalUsage.outputTokens ?? null,
           },
         };
-      },//;
+      },
     );
 
     /** Streaming coaching chat - UI message stream (SSE), useChat-compatible. */

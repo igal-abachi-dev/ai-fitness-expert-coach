@@ -1,9 +1,12 @@
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
+import swagger from '@fastify/swagger';
+import swaggerUi from '@fastify/swagger-ui';
 import Fastify, { type FastifyError } from 'fastify';
 import {
   hasZodFastifySchemaValidationErrors,
+  jsonSchemaTransform,
   serializerCompiler,
   validatorCompiler,
   type ZodTypeProvider,
@@ -38,10 +41,24 @@ export function buildApp({ env, model, providerOptions, supportsTemperature, exe
       }),
     },
     requestIdHeader: 'x-request-id',
+    // Render (and similar) terminate TLS at a proxy — required for correct
+    // client IPs in rate limiting and logs.
+    trustProxy: env.NODE_ENV === 'production',
   }).withTypeProvider<ZodTypeProvider>();
 
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
+
+  
+// gen react: npx openapi-typescript http://localhost:3000/documentation/json --output ./src/api/v1.d.ts
+  // Must register before routes so onRoute hooks capture Zod schemas.
+  app.register(swagger, {
+    openapi: {
+      info: { title: 'AI Fitness Coach API', version: '1.0.0' },
+    },
+    transform: jsonSchemaTransform,
+  });
+  app.register(swaggerUi, { routePrefix: '/documentation' });
 
   app.register(helmet);
 
