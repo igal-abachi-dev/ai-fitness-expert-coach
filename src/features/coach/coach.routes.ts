@@ -36,7 +36,7 @@ function assessmentPrompt(a: UserAssessment, repairIssues?: string[]): string {
   if (!repairIssues?.length) return base;
   return `${base}\n\nYour previous plan failed these domain checks. Fix every one and regenerate the full plan:\n${repairIssues.map((i) => `- ${i}`).join('\n')}`;
 }
-
+//Add auth/API-key protection before making expensive agent endpoints public.
 export function coachRoutes(deps: CoachRoutesDeps): FastifyPluginAsyncZod {
   return async (app) => {
     /**

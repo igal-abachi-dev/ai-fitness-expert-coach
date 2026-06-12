@@ -18,6 +18,7 @@ export interface Exercise {
   cues: string;
 }
 
+//Move the exercise library from in-memory to DB/search when the catalog becomes real.
 export interface ExerciseLibrary {
   search(
     query: { pattern?: Exercise['pattern']; equipment?: Exercise['equipment'][] },
