@@ -30,11 +30,16 @@ calling the coach endpoints.
 | `HOST` | `0.0.0.0` | Bind address |
 | `PORT` | `3000` | Listen port |
 | `LOG_LEVEL` | `info` | Pino log level |
-| `ANTHROPIC_API_KEY` | — | Claude (active provider) |
-| `OPENAI_API_KEY` | — | Required by env schema; used when multi-provider routing is enabled |
-| `GOOGLE_GENERATIVE_AI_API_KEY` | — | Required by env schema; used when multi-provider routing is enabled |
-| `XAI_API_KEY` | — | Required by env schema; used when multi-provider routing is enabled |
-| `AGENT_MODEL` | `claude-opus-4-8` | Model id passed to the active provider |
+| `GOOGLE_GENERATIVE_AI_API_KEY` | — | Google Gemini (free tier; default quality + cheap roles) |
+| `CEREBRAS_API_KEY` | — | Cerebras (free tier; default fast role) |
+| `GROQ_API_KEY` | — | Groq (free tier; optional fast/backup) |
+| `ANTHROPIC_API_KEY` | — | Claude (optional) |
+| `OPENAI_API_KEY` | — | OpenAI (optional) |
+| `XAI_API_KEY` | — | xAI Grok (optional) |
+| `QUALITY_MODEL` | `google/gemini-3-flash-preview` | `/plan` primary — best free structured output |
+| `CHEAP_MODEL` | `google/gemini-3.1-flash-lite` | `/ask` + `/plan` quota-overflow fallback |
+| `FAST_MODEL` | `cerebras/gpt-oss-120b` | `/chat` stream — lowest latency |
+| `AGENT_MODEL` | `google/gemini-3-flash-preview` | Per-role fallback when a role var is unset |
 | `CORS_ORIGIN` | `http://localhost:5173` | Frontend origin; `*` is rejected in production |
 | `RATE_LIMIT_MAX` | `30` | Coach requests per IP per minute (`/health` is unlimited) |
 
@@ -180,14 +185,30 @@ never throttled.
 
 ## Provider / model
 
-Active code in `lib/ai/models.ts` uses Anthropic only — `AGENT_MODEL` is the
-Claude model id (e.g. `claude-opus-4-8`). Everything else depends on the
+`lib/ai/models.ts` is a multi-provider role factory. A model is named by a
+`"<provider>/<modelId>"` spec, so switching provider or model is an env change,
+never a code change. Providers wired: `google`, `cerebras`, `groq`, `xai`,
+`anthropic`, `openai`. Everything downstream depends only on the
 provider-neutral `LanguageModel` type.
 
-All four provider SDK packages are installed. Commented code in `models.ts` shows
-how to route by prefix (`google/…`, `openai/…`, `xai/…`, `anthropic/…`) using
-the matching env API key — uncomment that block to switch providers via
-`AGENT_MODEL` without touching routes or agents.
+Three roles drive per-endpoint routing — all default to a **free-tier** stack
+(Google Gemini + Cerebras, no credit card):
+
+| Role | Default | Used by |
+| --- | --- | --- |
+| `QUALITY_MODEL` | `google/gemini-3-flash-preview` | `/plan` (quality-first) |
+| `CHEAP_MODEL` | `google/gemini-3.1-flash-lite` | `/ask` + `/plan` overflow |
+| `FAST_MODEL` | `cerebras/gpt-oss-120b` | `/chat` (streaming) |
+
+`env.ts` validates **only** the API keys for providers actually referenced by
+the configured roles, with an error naming the missing key and the role that
+needs it. Each role falls back to `AGENT_MODEL` when its own var is unset.
+
+`/plan` is quality-first with real overflow: it runs the quality model with
+`maxRetries: 0`, and on a free-tier `429` it overflows to the cheap model
+(`isRateLimitError` unwraps the SDK's `RetryError`) rather than failing the
+user. Domain-validation repair still re-prompts the same model, then `502`s if
+the plan stays invalid.
 
 ## Next (kept behind interfaces, not built yet)
 

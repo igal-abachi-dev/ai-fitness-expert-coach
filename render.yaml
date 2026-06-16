@@ -15,16 +15,28 @@ services:
         value: 0.0.0.0
       - key: LOG_LEVEL
         value: info
+      # Model roles ("<provider>/<modelId>"); free-tier default stack.
+      - key: QUALITY_MODEL
+        value: google/gemini-3-flash-preview
+      - key: CHEAP_MODEL
+        value: google/gemini-3.1-flash-lite
+      - key: FAST_MODEL
+        value: cerebras/gpt-oss-120b
       - key: AGENT_MODEL
-        value: anthropic/claude-opus-4-8
+        value: google/gemini-3-flash-preview
       - key: RATE_LIMIT_MAX
         value: "30"
-      # Set in the Render dashboard (Environment → Add Secret):
+      # Set in the Render dashboard (Environment → Add Secret). Only the keys
+      # for providers referenced by the model roles above are required.
+      - key: GOOGLE_GENERATIVE_AI_API_KEY
+        sync: false
+      - key: CEREBRAS_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
       - key: ANTHROPIC_API_KEY
         sync: false
       - key: OPENAI_API_KEY
-        sync: false
-      - key: GOOGLE_GENERATIVE_AI_API_KEY
         sync: false
       - key: XAI_API_KEY
         sync: false

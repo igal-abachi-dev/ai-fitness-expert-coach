@@ -1,7 +1,9 @@
 import type { LanguageModelV3StreamPart } from '@ai-sdk/provider';
+import { APICallError, type LanguageModel } from 'ai';
 import { convertArrayToReadableStream, MockLanguageModelV3 } from 'ai/test';
 import { buildApp } from '../app.js';
 import { loadEnv } from '../config/env.js';
+import type { RoleModels } from '../lib/ai/models.js';
 import {
   createInMemoryExerciseLibrary,
   seedExercises,
@@ -53,15 +55,63 @@ export function scriptedModel(...texts: string[]) {
   });
 }
 
+/** A mock whose generate call always throws a provider 429 (quota exhausted). */
+export function rateLimitedModel() {
+  return new MockLanguageModelV3({
+    doGenerate: async () => {
+      throw new APICallError({
+        message: 'rate limited',
+        url: 'https://mock/generate',
+        requestBodyValues: {},
+        statusCode: 429,
+        isRetryable: false,
+      });
+    },
+  });
+}
+
+const testEnv = loadEnv({
+  NODE_ENV: 'test',
+  // All roles resolve to anthropic so a single key satisfies validation; the
+  // real models are never constructed because we inject mocks below.
+  ANTHROPIC_API_KEY: 'test-key',
+  QUALITY_MODEL: 'anthropic/claude-test',
+  CHEAP_MODEL: 'anthropic/claude-test',
+  FAST_MODEL: 'anthropic/claude-test',
+  LOG_LEVEL: 'fatal',
+});
+
+function asRoleModels(models: {
+  quality: LanguageModel;
+  cheap?: LanguageModel;
+  fast?: LanguageModel;
+}): RoleModels {
+  const wrap = (model: LanguageModel) => ({ model, supportsTemperature: true });
+  return {
+    quality: wrap(models.quality),
+    cheap: wrap(models.cheap ?? models.quality),
+    fast: wrap(models.fast ?? models.quality),
+  };
+}
+
 /** The whole point of buildApp(deps): tests swap the model, nothing else. */
 export function buildTestApp(model = textOnlyModel('mock answer')) {
   return buildApp({
-    env: loadEnv({
-      NODE_ENV: 'test',
-      ANTHROPIC_API_KEY: 'test-key',
-      LOG_LEVEL: 'fatal',
-    }),
-    model,
+    env: testEnv,
+    models: asRoleModels({ quality: model }),
+    exerciseLibrary: createInMemoryExerciseLibrary(seedExercises),
+  });
+}
+
+/** Build the app with distinct per-role mocks (e.g. to exercise /plan overflow). */
+export function buildTestAppWithRoles(models: {
+  quality: LanguageModel;
+  cheap?: LanguageModel;
+  fast?: LanguageModel;
+}) {
+  return buildApp({
+    env: testEnv,
+    models: asRoleModels(models),
     exerciseLibrary: createInMemoryExerciseLibrary(seedExercises),
   });
 }

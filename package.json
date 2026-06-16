@@ -16,7 +16,9 @@
   "license": "BSD-3-Clause",
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.82",
+    "@ai-sdk/cerebras": "^2.0.56",
     "@ai-sdk/google": "^3.0.80",
+    "@ai-sdk/groq": "^3.0.41",
     "@ai-sdk/openai": "^3.0.68",
     "@ai-sdk/xai": "^3.0.93",
     "@fastify/cors": "^11.2.0",

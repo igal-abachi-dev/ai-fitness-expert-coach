@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildTestApp,
+  buildTestAppWithRoles,
+  rateLimitedModel,
   scriptedModel,
   textOnlyModel,
 } from '../../testing/build-test-app.js';
@@ -97,6 +99,19 @@ describe('POST /v1/coach/plan', () => {
     const res = await app.inject({ method: 'POST', url: '/v1/coach/plan', payload: assessment });
     expect(res.statusCode).toBe(502);
     expect(res.json().issues.length).toBeGreaterThan(0);
+    await app.close();
+  });
+
+  it('overflows to the cheap model when the quality model is rate-limited', async () => {
+    // Quality model returns 429 -> route must fall back to the cheap model,
+    // which returns a valid plan, yielding a 200 instead of an error.
+    const app = buildTestAppWithRoles({
+      quality: rateLimitedModel(),
+      cheap: textOnlyModel(JSON.stringify(validPlan())),
+    });
+    const res = await app.inject({ method: 'POST', url: '/v1/coach/plan', payload: assessment });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().trainingProgram.weeklyLayout).toHaveLength(3);
     await app.close();
   });
 

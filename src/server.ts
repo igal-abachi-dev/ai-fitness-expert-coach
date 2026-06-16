@@ -4,24 +4,17 @@ import {
   createInMemoryExerciseLibrary,
   seedExercises,
 } from './features/coach/tools/exercise-library.tool.js';
-import { createAgentModelBundle } from './lib/ai/models.js';
+import { createModels } from './lib/ai/models.js';
 
 const env = loadEnv();
 
-const agentModel = createAgentModelBundle(env);
-
 const app = buildApp({
   env,
-  model: agentModel.model,
-  supportsTemperature: agentModel.supportsTemperature,
-  ...(agentModel.providerOptions !== undefined
-    ? { providerOptions: agentModel.providerOptions }
-    : {}),
+  models: createModels(env),
   // Swap for a DB-backed implementation when the catalogue grows:
   exerciseLibrary: createInMemoryExerciseLibrary(seedExercises),
 });
 
-// gen react: npx openapi-typescript http://localhost:3000/documentation/json --output ./src/api/v1.d.ts
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.once(signal, async () => {

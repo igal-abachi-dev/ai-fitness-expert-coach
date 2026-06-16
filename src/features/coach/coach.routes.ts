@@ -4,13 +4,16 @@ import {
   NoOutputGeneratedError,
   UI_MESSAGE_STREAM_HEADERS,
   validateUIMessages,
-  type LanguageModel,
 } from 'ai';
-import type { ProviderOptions } from '@ai-sdk/provider-utils';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
+import { isRateLimitError, type RoleModels } from '../../lib/ai/models.js';
 import { abortOnClientDisconnect } from '../../lib/http/abort-on-client-disconnect.js';
-import { createCoachPlanAgent, type CoachChatAgent } from './coach.agent.js';
+import {
+  agentDepsFromBundle,
+  createCoachPlanAgent,
+  type CoachChatAgent,
+} from './coach.agent.js';
 import {
   askRequestSchema,
   askResponseSchema,
@@ -25,10 +28,12 @@ import { validateCoachPlanDomain } from './domain/validate-coach-plan.js';
 import type { ToolDeps } from './tools/index.js';
 
 export interface CoachRoutesDeps extends ToolDeps {
-  model: LanguageModel;
-  providerOptions?: ProviderOptions;
-  supportsTemperature?: boolean;
+  /** quality (/plan primary) + cheap (/plan overflow) role models. */
+  models: RoleModels;
+  /** Streaming /chat agent (fast role). */
   chatAgent: CoachChatAgent;
+  /** One-shot /ask agent (cheap role). */
+  askAgent: CoachChatAgent;
 }
 
 function assessmentPrompt(a: UserAssessment, repairIssues?: string[]): string {
@@ -58,29 +63,43 @@ export function coachRoutes(deps: CoachRoutesDeps): FastifyPluginAsyncZod {
       async (request, reply) => {
         const assessment = request.body;
         const signal = abortOnClientDisconnect(reply);
+        const tools = { exerciseLibrary: deps.exerciseLibrary };
 
         // 1. Deterministic pre-check; flags are injected into instructions.
         const flags = detectSafetyFlags(assessment);
-        const planAgent = createCoachPlanAgent(
-          {
-            model: deps.model,
-            exerciseLibrary: deps.exerciseLibrary,
-            ...(deps.providerOptions !== undefined
-              ? { providerOptions: deps.providerOptions }
-              : {}),
-            ...(deps.supportsTemperature !== undefined
-              ? { supportsTemperature: deps.supportsTemperature }
-              : {}),
-          },
+        const qualityAgent = createCoachPlanAgent(
+          agentDepsFromBundle(deps.models.quality, tools),
           flags,
         );
 
-        const generate = async (repairIssues?: string[]): Promise<CoachOutput> => {
-          const result = await planAgent.generate({
+        const generateWith = async (
+          agent: ReturnType<typeof createCoachPlanAgent>,
+          repairIssues?: string[],
+        ): Promise<CoachOutput> => {
+          const result = await agent.generate({
             prompt: assessmentPrompt(assessment, repairIssues),
             abortSignal: signal,
           });
           return result.output;
+        };
+
+        // Quality-first: run the best free model; on a free-tier 429 overflow
+        // to the cheap model (built lazily) instead of failing the user.
+        let cheapAgent: ReturnType<typeof createCoachPlanAgent> | undefined;
+        const generate = async (
+          repairIssues?: string[],
+        ): Promise<CoachOutput> => {
+          try {
+            return await generateWith(qualityAgent, repairIssues);
+          } catch (error) {
+            if (!isRateLimitError(error)) throw error;
+            request.log.warn('quality model rate-limited, overflowing to cheap');
+            cheapAgent ??= createCoachPlanAgent(
+              agentDepsFromBundle(deps.models.cheap, tools),
+              flags,
+            );
+            return generateWith(cheapAgent, repairIssues);
+          }
         };
 
         try {
@@ -126,7 +145,7 @@ export function coachRoutes(deps: CoachRoutesDeps): FastifyPluginAsyncZod {
           ? `User profile: ${JSON.stringify(profile)}\n\n${prompt}`
           : prompt;
 
-        const result = await deps.chatAgent.generate({
+        const result = await deps.askAgent.generate({
           prompt: fullPrompt,
           abortSignal: abortOnClientDisconnect(reply),
         });

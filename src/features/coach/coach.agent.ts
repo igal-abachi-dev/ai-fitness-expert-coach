@@ -1,5 +1,6 @@
 import { Output, stepCountIs, ToolLoopAgent, type LanguageModel } from 'ai';
 import type { ProviderOptions } from '@ai-sdk/provider-utils';
+import type { AgentModelBundle } from '../../lib/ai/models.js';
 import { buildPlanInstructions, COACH_SYSTEM_PROMPT } from './coach.prompt.js';
 import { coachOutputSchema } from './coach.schemas.js';
 import { createCoachTools, type ToolDeps } from './tools/index.js';
@@ -12,6 +13,21 @@ export interface CoachAgentDeps extends ToolDeps {
   providerOptions?: ProviderOptions;
   /** When false, temperature is omitted (reasoning models). Defaults to true for mocks. */
   supportsTemperature?: boolean;
+}
+
+/** Merges a role's model bundle with the shared tool deps into agent deps. */
+export function agentDepsFromBundle(
+  bundle: AgentModelBundle,
+  tools: ToolDeps,
+): CoachAgentDeps {
+  return {
+    ...tools,
+    model: bundle.model,
+    supportsTemperature: bundle.supportsTemperature,
+    ...(bundle.providerOptions !== undefined
+      ? { providerOptions: bundle.providerOptions }
+      : {}),
+  };
 }
 
 function coachAgentCallSettings(
@@ -56,6 +72,9 @@ export function createCoachPlanAgent(deps: CoachAgentDeps, safetyFlags: string[]
     tools: createCoachTools(deps),
     output: Output.object({ schema: coachOutputSchema }),
     stopWhen: stepCountIs(10),
+    // A free-tier 429 should surface immediately so the route can overflow to
+    // the cheap model, rather than the SDK backing off for ~5s first.
+    maxRetries: 0,
     ...coachAgentCallSettings(deps, PLAN_TEMPERATURE),
   });
 }

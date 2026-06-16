@@ -11,19 +11,20 @@ import {
   validatorCompiler,
   type ZodTypeProvider,
 } from 'fastify-type-provider-zod';
-import type { ProviderOptions } from '@ai-sdk/provider-utils';
-import type { LanguageModel } from 'ai';
 import type { Env } from './config/env.js';
-import { createCoachChatAgent } from './features/coach/coach.agent.js';
+import type { RoleModels } from './lib/ai/models.js';
+import {
+  agentDepsFromBundle,
+  createCoachChatAgent,
+} from './features/coach/coach.agent.js';
 import { coachRoutes } from './features/coach/coach.routes.js';
 import type { ExerciseLibrary } from './features/coach/tools/exercise-library.tool.js';
 import { healthRoutes } from './features/health/health.routes.js';
 
 export interface AppDeps {
   env: Env;
-  model: LanguageModel;
-  providerOptions?: ProviderOptions;
-  supportsTemperature?: boolean;
+  /** Role-routed models: quality (/plan), cheap (/ask + plan overflow), fast (/chat). */
+  models: RoleModels;
   exerciseLibrary: ExerciseLibrary;
 }
 
@@ -32,7 +33,8 @@ export interface AppDeps {
  * app but never reads process.env, never listens, never touches the network.
  * Tests inject a MockLanguageModelV3; server.ts injects the real provider.
  */
-export function buildApp({ env, model, providerOptions, supportsTemperature, exerciseLibrary }: AppDeps) {
+export function buildApp({ env, models, exerciseLibrary }: AppDeps) {
+  const tools = { exerciseLibrary };
   const app = Fastify({
     logger: {
       level: env.LOG_LEVEL,
@@ -86,14 +88,16 @@ export function buildApp({ env, model, providerOptions, supportsTemperature, exe
     });
   });
 
-  // Long-lived chat agent (instructions are static). The plan agent is built
+  // Long-lived chat agents (instructions are static). The plan agent is built
   // per-request inside the route because safety flags are injected.
-  const chatAgent = createCoachChatAgent({
-    model,
-    exerciseLibrary,
-    ...(providerOptions !== undefined ? { providerOptions } : {}),
-    ...(supportsTemperature !== undefined ? { supportsTemperature } : {}),
-  });
+  //   /chat streams -> fast (lowest latency)
+  //   /ask one-shot -> cheap (Gemini Flash-Lite quality at high volume)
+  const chatAgent = createCoachChatAgent(
+    agentDepsFromBundle(models.cheap/*models.fast*/, tools),
+  );
+  const askAgent = createCoachChatAgent(
+    agentDepsFromBundle(models.cheap, tools),
+  );
 
   // Health is unlimited so platform probes (Render/Fly/Railway) are never
   // throttled. Rate limiting is scoped to the expensive coach endpoints.
@@ -106,11 +110,10 @@ export function buildApp({ env, model, providerOptions, supportsTemperature, exe
       });
       await coach.register(
         coachRoutes({
-          model,
+          models,
           exerciseLibrary,
           chatAgent,
-          ...(providerOptions !== undefined ? { providerOptions } : {}),
-          ...(supportsTemperature !== undefined ? { supportsTemperature } : {}),
+          askAgent,
         }),
       );
     },
