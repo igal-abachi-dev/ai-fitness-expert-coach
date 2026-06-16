@@ -83,13 +83,44 @@ curl -X POST localhost:3000/v1/coach/plan -H 'content-type: application/json' -d
 
 **Ask** — optional `profile` is a partial assessment for context; response includes
 `text`, tool-loop `steps`, and token `usage`:
-
+What is a good warm-up before squats? One sentence.
 ```bash
-curl -X POST localhost:3000/v1/coach/ask -H 'content-type: application/json' -d '{
-  "prompt": "How should I warm up before heavy squats?",
-  "profile": { "experienceLevel": "intermediate", "limitationsOrInjuries": ["knee pain"] }
+curl -X 'POST' \
+  'http://localhost:3000/v1/coach/ask' \
+  -H 'accept: application/json' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "prompt": "What is a good warm-up before squats? One sentence. How should I warm up before heavy squats",
+  "profile": {
+    "age": 39,
+    "sex": "male",
+    "heightCm": 160,
+    "weightKg": 60,
+    "bodyFatPct": 11,
+    "primaryGoal": "athletic_performance",
+    "experienceLevel": "intermediate",
+    "trainingDaysPerWeek": 3,
+    "equipment": [
+      "barbell","dumbbell","cables","kettlebell","bodyweight"
+    ],
+    "limitationsOrInjuries": [],
+    "currentDietStyle": "healthy food mostly"
+  }
 }'
+
+
+response:
+{
+  "text": "A effective squat warm-up ...",
+  "steps": 2,
+  "usage": {
+    "inputTokens": 3659,
+    "outputTokens": 1704
+  }
+}
 ```
+
+
 
 **Chat** — SSE stream compatible with AI SDK `useChat` (`DefaultChatTransport` → `/v1/coach/chat`):
 
@@ -201,7 +232,8 @@ Agent tools: `searchExerciseLibrary`, `estimateTrainingLoad`, `estimateNutrition
 
 Both agents use AI SDK [`ToolLoopAgent`](https://ai-sdk.dev/docs/reference/ai-sdk-core/tool-loop-agent).
 
-- **chat agent** (`/ask`, `/chat`): static instructions, built once, reused; up to 10 tool-loop steps.
+- **ask agent** (`/ask`): concise-by-default instructions; per-request `maxOutputTokens` (300 default, 90 when the prompt asks for brevity).
+- **chat agent** (`/chat`): static instructions, built once, reused; up to 10 tool-loop steps.
 - **plan agent** (`/plan`): built per-request because deterministic safety flags
   are injected into its instructions; `Output.object` schema + up to 12 steps.
   Both share the same toolset.
@@ -300,7 +332,17 @@ downstream depends only on the provider-neutral `LanguageModel` type.
 
 Reasoning models (Gemini 3, gpt-oss, Claude 4.x, o-series, etc.) omit
 `temperature` and receive provider-specific `providerOptions` (thinking/reasoning
-effort) via `isReasoningModel()`.
+effort) via `isReasoningModel()`. Effort is **role-based**, not global:
+
+| Role | Reasoning | Used by |
+| --- | --- | --- |
+| `quality` | high | `/plan` (tool loop + structured output) |
+| `cheap` | medium (+ thought traces) | `/ask`, `/plan` overflow |
+| `fast` | minimal | `/chat` (intended — see note below) |
+
+Thought summaries (`includeThoughts` on Gemini, `reasoningSummary` on OpenAI)
+are enabled only for **medium** and **high** effort — off for **low** and
+**minimal** so `/ask` and `/chat` stay lean.
 
 Three roles drive per-endpoint routing — all default to a **free-tier** stack
 (Google Gemini + Cerebras, no credit card):

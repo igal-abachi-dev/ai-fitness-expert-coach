@@ -1,7 +1,8 @@
 import { Output, stepCountIs, ToolLoopAgent, type LanguageModel } from 'ai';
 import type { ProviderOptions } from '@ai-sdk/provider-utils';
+import { z } from 'zod';
 import type { AgentModelBundle } from '../../lib/ai/models.js';
-import { buildPlanInstructions, COACH_SYSTEM_PROMPT } from './coach.prompt.js';
+import { buildPlanInstructions, COACH_SYSTEM_PROMPT, ASK_COACH_INSTRUCTIONS } from './coach.prompt.js';
 import { coachOutputSchema } from './coach.schemas.js';
 import { createCoachTools, type ToolDeps } from './tools/index.js';
 
@@ -65,6 +66,27 @@ export function createCoachChatAgent(deps: CoachAgentDeps) {
   });
 }
 export type CoachChatAgent = ReturnType<typeof createCoachChatAgent>;
+
+const askCallOptionsSchema = z.object({
+  maxOutputTokens: z.number().int().positive(),
+});
+
+/** One-shot /ask: concise-by-default instructions; output length capped per request in the route. */
+export function createCoachAskAgent(deps: CoachAgentDeps) {
+  return new ToolLoopAgent({
+    model: deps.model,
+    instructions: ASK_COACH_INSTRUCTIONS,
+    tools: createCoachTools(deps),
+    stopWhen: stepCountIs(CHAT_MAX_STEPS),
+    ...coachAgentCallSettings(deps, CHAT_TEMPERATURE),
+    callOptionsSchema: askCallOptionsSchema,
+    prepareCall: ({ options, ...settings }) => ({
+      ...settings,
+      maxOutputTokens: options.maxOutputTokens,
+    }),
+  });
+}
+export type CoachAskAgent = ReturnType<typeof createCoachAskAgent>;
 
 /**
  * Plan generator: a tool-using agent with a structured output contract.

@@ -15,6 +15,7 @@ import type { Env } from './config/env.js';
 import type { RoleModels } from './lib/ai/models.js';
 import {
   agentDepsFromBundle,
+  createCoachAskAgent,
   createCoachChatAgent,
 } from './features/coach/coach.agent.js';
 import { coachRoutes } from './features/coach/coach.routes.js';
@@ -100,7 +101,7 @@ export function buildApp({ env, models, exerciseLibrary }: AppDeps) {
   const chatAgent = createCoachChatAgent(
     agentDepsFromBundle(models.cheap/*models.fast*/, tools),
   );
-  const askAgent = createCoachChatAgent(
+  const askAgent = createCoachAskAgent(
     agentDepsFromBundle(models.cheap, tools),
   );
 

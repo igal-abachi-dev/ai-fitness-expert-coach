@@ -9,9 +9,11 @@ import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { isRateLimitError, type RoleModels } from '../../lib/ai/models.js';
 import { abortOnClientDisconnect } from '../../lib/http/abort-on-client-disconnect.js';
+import { maxOutputTokensForAsk } from './ask-length.js';
 import {
   agentDepsFromBundle,
   createCoachPlanAgent,
+  type CoachAskAgent,
   type CoachChatAgent,
 } from './coach.agent.js';
 import {
@@ -33,7 +35,7 @@ export interface CoachRoutesDeps extends ToolDeps {
   /** Streaming /chat agent (fast role). */
   chatAgent: CoachChatAgent;
   /** One-shot /ask agent (cheap role). */
-  askAgent: CoachChatAgent;
+  askAgent: CoachAskAgent;
 }
 
 function assessmentPrompt(a: UserAssessment, repairIssues?: string[]): string {
@@ -147,6 +149,7 @@ export function coachRoutes(deps: CoachRoutesDeps): FastifyPluginAsyncZod {
 
         const result = await deps.askAgent.generate({
           prompt: fullPrompt,
+          options: { maxOutputTokens: maxOutputTokensForAsk(prompt) },
           abortSignal: abortOnClientDisconnect(reply),
         });
 

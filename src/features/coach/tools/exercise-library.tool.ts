@@ -14,7 +14,7 @@ export interface Exercise {
     | 'vertical-pull'
     | 'carry'
     | 'core';
-  equipment: 'barbell' | 'dumbbell' | 'machine' | 'kettlebell' | 'bodyweight' | 'rings';
+  equipment: 'barbell' | 'dumbbell' | 'machine' |'cables'| 'kettlebell' | 'bodyweight' | 'rings';
   level: 'beginner' | 'intermediate' | 'advanced';
   cues: string;
 }

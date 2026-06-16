@@ -4,6 +4,7 @@ export const equipmentEnum = z.enum([
   'barbell',
   'dumbbell',
   'machine',
+  'cables',
   'kettlebell',
   'bodyweight',
   'rings',

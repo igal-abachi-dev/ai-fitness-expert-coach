@@ -38,6 +38,41 @@ export interface RoleModels {
   fast: AgentModelBundle;
 }
 
+export type ModelRole = keyof RoleModels;
+
+type ReasoningEffort = 'minimal' | 'low' | 'medium' | 'high';
+
+/** Deeper reasoning for `/plan`; lighter for `/ask` and `/chat`. */
+function reasoningEffortForRole(role: ModelRole): ReasoningEffort {
+  switch (role) {
+    case 'quality':
+      return 'high';
+    case 'cheap':
+      return 'medium';//'low'?
+    case 'fast':
+      return 'minimal';
+  }
+}
+
+/** Providers that only accept low | medium | high (no minimal). */
+function providerEffort(effort: ReasoningEffort): 'low' | 'medium' | 'high' {
+  return effort === 'minimal' ? 'low' : effort;
+}
+
+/** Thought summaries are useful for deeper roles; skip them on low/minimal. */
+function exposesThoughtTraces(effort: ReasoningEffort): boolean {
+  return effort === 'medium' || effort === 'high';
+  /*I would not do that in production.
+
+  maybe:
+process.env.AI_DEBUG_THOUGHTS === 'true' && exposesThoughtTraces(effort);
+
+AI SDK’s Google provider docs say includeThoughts: true returns thought summaries, 
+which are synthesized summaries of the model’s internal reasoning process. 
+Google’s Gemini thinking docs also describe thinkingBudget / thinkingLevel as reasoning controls, 
+but thought summaries are mainly useful for debugging, not normal app responses. */
+}
+
 function requireApiKey(env: Env, provider: ModelProvider): string {
   const envKey = PROVIDER_KEY_ENV[provider];
   const apiKey = env[envKey as keyof Env] as string | undefined;
@@ -91,50 +126,82 @@ export function isReasoningModel(
   }
 }
 
+function buildGoogleThinkingConfig(
+  modelId: string,
+  role: ModelRole,
+): {
+  thinkingLevel?: ReasoningEffort;
+  thinkingBudget?: number;
+  includeThoughts: boolean;
+} {
+  const effort = reasoningEffortForRole(role);
+  const includeThoughts = exposesThoughtTraces(effort);
+  const id = modelId.toLowerCase();
+
+  // Gemini 3.x: thinkingLevel. Gemini 2.5: thinkingBudget (0 off, -1 dynamic).
+  if (id.includes('gemini-3')) {
+    return { thinkingLevel: effort, includeThoughts };
+  }
+
+  const thinkingBudget =
+    effort === 'high' ? -1 : effort === 'medium' ? 4096 : 0;
+
+  return { thinkingBudget, includeThoughts };
+}
+
 function buildReasoningProviderOptions(
   provider: ModelProvider,
+  modelId: string,
+  role: ModelRole,
 ): ProviderOptions {
+  const roleEffort = reasoningEffortForRole(role);
+  const effort = providerEffort(roleEffort);
+  const thoughtTraces = exposesThoughtTraces(roleEffort);
+
   switch (provider) {
     case 'google':
       return {
         google: {
-          thinkingConfig: {
-            thinkingLevel: 'high',
-            includeThoughts: true,
-          },
+          thinkingConfig: buildGoogleThinkingConfig(modelId, role),
         },
       };
     case 'cerebras':
     case 'groq':
       // OpenAI-compatible reasoning knob (gpt-oss et al.).
-      return { [provider]: { reasoningEffort: 'high' } };
+      return { [provider]: { reasoningEffort: effort } };
     case 'xai':
-      return { xai: { reasoning: 'high' } };
+      return { xai: { reasoningEffort: effort === 'high' ? 'high' : 'low', } };
     case 'anthropic':
       return {
         anthropic: {
           thinking: { type: 'adaptive' },
-          effort: 'high',
+          effort,
         },
       };
     case 'openai':
       return {
         openai: {
-          reasoningEffort: 'high',
-          reasoningSummary: 'detailed',
+          reasoningEffort: effort,
+          ...(thoughtTraces
+            ? {
+                reasoningSummary:
+                  roleEffort === 'high' ? 'detailed' : 'auto',
+              }
+            : {}),
         },
       };
   }
 }
 
-function callSettingsFor(
+export function callSettingsFor(
   modelId: string,
   provider: ModelProvider,
+  role: ModelRole,
 ): AgentCallSettings {
   if (isReasoningModel(modelId, provider)) {
     return {
-      supportsTemperature: false,
-      providerOptions: buildReasoningProviderOptions(provider),
+      supportsTemperature: provider === 'google',
+      providerOptions: buildReasoningProviderOptions(provider, modelId, role),
     };
   }
   return { supportsTemperature: true };
@@ -170,22 +237,30 @@ function buildModel(
 }
 
 /** Builds one role's model + per-call settings from a `"<provider>/<id>"` spec. */
-export function createModelBundle(spec: string, env: Env): AgentModelBundle {
+export function createModelBundle(
+  spec: string,
+  env: Env,
+  role: ModelRole,
+): AgentModelBundle {
   const provider = resolveModelProvider(spec);
   const modelId = stripProviderPrefix(spec, provider);
   const apiKey = requireApiKey(env, provider);
   return {
     model: buildModel(provider, modelId, apiKey),
-    ...callSettingsFor(modelId, provider),
+    ...callSettingsFor(modelId, provider, role),
   };
 }
 
 /** Builds all three role bundles from the env (roles fall back to AGENT_MODEL). */
 export function createModels(env: Env): RoleModels {
   return {
-    quality: createModelBundle(env.QUALITY_MODEL || env.AGENT_MODEL, env),
-    cheap: createModelBundle(env.CHEAP_MODEL || env.AGENT_MODEL, env),
-    fast: createModelBundle(env.FAST_MODEL || env.AGENT_MODEL, env),
+    quality: createModelBundle(
+      env.QUALITY_MODEL || env.AGENT_MODEL,
+      env,
+      'quality',
+    ),
+    cheap: createModelBundle(env.CHEAP_MODEL || env.AGENT_MODEL, env, 'cheap'),
+    fast: createModelBundle(env.FAST_MODEL || env.AGENT_MODEL, env, 'fast'),
   };
 }
 
