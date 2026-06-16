@@ -12,7 +12,7 @@ persistent memory, optional Neon/Postgres profiles.
 
 Verified against: `ai@6.0.x`, `fastify@5.8.x`, `zod@4.x`,
 `fastify-type-provider-zod@6.x`, `@fastify/helmet@13`, `@fastify/cors@11`,
-`@fastify/rate-limit@11`, `@fastify/swagger@9`, Node 22. Typecheck + 19 tests
+`@fastify/rate-limit@11`, `@fastify/swagger@9`, Node 22. Typecheck + 29 tests
 pass; `npm ci` + build smoke-tested.
 
 ## Quick start
@@ -51,7 +51,7 @@ configured model roles are required.
 | `ANTHROPIC_API_KEY` | — | Claude (optional) |
 | `OPENAI_API_KEY` | — | OpenAI (optional) |
 | `XAI_API_KEY` | — | xAI Grok (optional) |
-| `QUALITY_MODEL` | `google/gemini-3-flash-preview` | `/plan` primary — best free structured output |
+| `QUALITY_MODEL` | `google/gemini-3.5-flash` | `/plan` primary — best free structured output |
 | `CHEAP_MODEL` | `google/gemini-3.1-flash-lite` | `/ask` + `/plan` quota-overflow fallback |
 | `FAST_MODEL` | `cerebras/gpt-oss-120b` | Intended for `/chat` stream — lowest latency |
 | `AGENT_MODEL` | `google/gemini-3-flash-preview` | Per-role fallback when a role var is unset |
@@ -82,8 +82,9 @@ curl -X POST localhost:3000/v1/coach/plan -H 'content-type: application/json' -d
 ```
 
 **Ask** — optional `profile` is a partial assessment for context; response includes
-`text`, tool-loop `steps`, and token `usage`:
-What is a good warm-up before squats? One sentence.
+`text`, tool-loop `steps`, and token `usage`. Prompts with brevity keywords
+(`one sentence`, `brief`, `short`, etc.) get a tighter output cap (600 vs 1500 tokens).
+
 ```bash
 curl -X 'POST' \
   'http://localhost:3000/v1/coach/ask' \
@@ -232,7 +233,7 @@ Agent tools: `searchExerciseLibrary`, `estimateTrainingLoad`, `estimateNutrition
 
 Both agents use AI SDK [`ToolLoopAgent`](https://ai-sdk.dev/docs/reference/ai-sdk-core/tool-loop-agent).
 
-- **ask agent** (`/ask`): concise-by-default instructions; per-request `maxOutputTokens` (300 default, 90 when the prompt asks for brevity).
+- **ask agent** (`/ask`): concise-by-default instructions; per-request `maxOutputTokens` (1500 default, 600 when the prompt asks for brevity).
 - **chat agent** (`/chat`): static instructions, built once, reused; up to 10 tool-loop steps.
 - **plan agent** (`/plan`): built per-request because deterministic safety flags
   are injected into its instructions; `Output.object` schema + up to 12 steps.
@@ -349,7 +350,7 @@ Three roles drive per-endpoint routing — all default to a **free-tier** stack
 
 | Role | Default | Used by |
 | --- | --- | --- |
-| `QUALITY_MODEL` | `google/gemini-3-flash-preview` | `/plan` (quality-first) |
+| `QUALITY_MODEL` | `google/gemini-3.5-flash` | `/plan` (quality-first) |
 | `CHEAP_MODEL` | `google/gemini-3.1-flash-lite` | `/ask` + `/plan` overflow |
 | `FAST_MODEL` | `cerebras/gpt-oss-120b` | `/chat` (intended — see note below) |
 
