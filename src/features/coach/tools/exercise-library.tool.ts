@@ -1,5 +1,6 @@
 import { tool } from 'ai';
 import { z } from 'zod';
+import { equipmentEnum } from '../coach.schemas.js';
 
 export interface Exercise {
   id: string;
@@ -45,9 +46,7 @@ export function createExerciseLibraryTool(library: ExerciseLibrary) {
           'core',
         ])
         .optional(),
-      equipment: z
-        .array(z.enum(['barbell', 'dumbbell', 'machine', 'kettlebell', 'bodyweight']))
-        .optional(),
+      equipment: z.array(equipmentEnum).optional(),
     }),
     execute: async ({ pattern, equipment }, { abortSignal }) => {
       const exercises = await library.search(

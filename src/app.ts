@@ -51,8 +51,13 @@ export function buildApp({ env, models, exerciseLibrary }: AppDeps) {
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
 
-  
-// gen react: npx openapi-typescript http://localhost:3000/documentation/json --output ./src/api/v1.d.ts
+  app.addHook('onRequest', async (request, reply) => {
+    if (request.id) {
+      reply.header('x-request-id', request.id);
+    }
+  });
+
+  // gen react: npx openapi-typescript http://localhost:3000/documentation/json --output ./src/api/v1.d.ts
   // Must register before routes so onRoute hooks capture Zod schemas.
   app.register(swagger, {
     openapi: {
