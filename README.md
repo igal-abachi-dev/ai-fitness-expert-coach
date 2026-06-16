@@ -222,6 +222,74 @@ Render/similar proxies.
 Auth/API-key protection on coach endpoints is not implemented yet — add before
 public deployment.
 
+## Why Node.js / TypeScript (not C# / Python)
+
+The agent stack is TypeScript-first. [Vercel AI SDK](https://ai-sdk.dev),
+OpenAI's Node SDK, Anthropic, and tooling from Cursor and the broader agent
+ecosystem ship their best-supported, most up-to-date APIs for TypeScript — typed
+`ToolLoopAgent`, `Output.object`, streaming UI protocols, and provider adapters
+land here first.
+
+C# (ASP.NET) and Python (FastAPI, LangChain) are fine for production APIs, but
+for this project the friction is higher: fewer first-class agent primitives, more
+glue between HTTP and the model loop, and a weaker path to the same Zod-typed
+contracts end-to-end. Node 22 + strict TypeScript keeps the backend on the same
+language and type system as a React/Vite frontend and matches how modern agent
+APIs are documented and evolved.
+
+## Why Fastify (not NestJS)
+
+This repo is a native [Fastify](https://fastify.dev) project, not a NestJS app on
+the Fastify adapter. Nest with Fastify is valid — Nest documents
+[`FastifyAdapter`](https://docs.nestjs.com/techniques/performance) as an
+alternative HTTP provider, and Nest's own benchmarks show Fastify ahead of Express
+— but for an AI agent API the extra framework layer buys little and costs control.
+
+**This project is shaped for agent work**, not general REST scaffolding:
+
+```
+request
+  → Fastify route
+  → Zod schema
+  → safety / domain pre-check
+  → ToolLoopAgent
+  → deterministic tools
+  → Output.object schema validation
+  → domain validation
+  → one repair attempt
+  → response
+```
+
+That pipeline — streaming, tool loops, structured output, deterministic validation,
+repair flow, safety flags, explicit dependency injection, and testable tools — is
+the hard part of an agent backend. A typical Nest starter (demo routes, worker
+threads, generic logging) does not solve it: no AI SDK integration, no agent tools,
+no stream protocol, no safety pipeline, no repair loop, no domain validation.
+
+Native Fastify gives the useful parts directly:
+
+| Need | Fastify (this repo) |
+| --- | --- |
+| Validation / serialization | Schema-first hooks; fits `fastify-type-provider-zod` + Zod end-to-end |
+| Streaming | First-class route handlers; SSE for `/v1/coach/chat` without adapter friction |
+| Composition | Plugins + explicit `buildApp(deps)` — no decorator/container magic |
+| Testing | `app.inject()` against the real app with `MockLanguageModelV3` injected |
+| AI SDK v6 | `ToolLoopAgent`, `Output.object`, tool `inputSchema`, `stopWhen` wired straight into routes |
+
+Compared to a Nest+Fastify starter zip, this repo also keeps production posture
+tighter: CORS locked to a concrete origin in production (env rejects `*`), rate
+limiting scoped to expensive coach routes, and e2e tests that exercise the actual
+Fastify instance — not `createNestApplication()` without the Fastify adapter.
+
+**When Nest would make sense:** decorator-heavy architecture, large enterprise
+module trees, guards/interceptors/pipes everywhere, GraphQL or microservice patterns
+through Nest, or a team already standardized on Nest conventions.
+
+**For this fitness coach agent API, native Fastify is cleaner:** less framework
+magic, better streaming control, simpler dependency injection, easier AI SDK
+integration, faster route/test feedback, and fewer layers between the agent loop
+and HTTP.
+
 ## Provider / model
 
 `lib/ai/models.ts` is a multi-provider role factory. A model is named by a
