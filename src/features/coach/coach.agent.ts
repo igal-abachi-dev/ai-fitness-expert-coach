@@ -5,8 +5,9 @@ import { buildPlanInstructions, COACH_SYSTEM_PROMPT } from './coach.prompt.js';
 import { coachOutputSchema } from './coach.schemas.js';
 import { createCoachTools, type ToolDeps } from './tools/index.js';
 
-const CHAT_TEMPERATURE = 0.3;
-const PLAN_TEMPERATURE = 0.2;
+const CHAT_TEMPERATURE = 0.3;//is good because chat can sound more natural but still should not become too creative.
+const PLAN_TEMPERATURE = 0.2;//is good because plans should be consistent, safe, and schema-valid.
+
 /** /ask + /chat: 1 text turn or a few tool rounds; cap runaway loops. */
 const CHAT_MAX_STEPS = 10;
 /** /plan: nutrition + load + library lookups + structured output (up to 7 training days). */

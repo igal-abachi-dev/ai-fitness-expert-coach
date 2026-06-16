@@ -348,3 +348,74 @@ secrets in the Render dashboard.
 - [Loop control](https://ai-sdk.dev/docs/agents/loop-control)
 - [Memory](https://ai-sdk.dev/docs/agents/memory)
 - [Workflows](https://ai-sdk.dev/docs/agents/workflows)
+- [Google Generative AI Provider - @ai-sdk/google](https://ai-sdk.dev/providers/ai-sdk-providers/google-generative-ai)
+
+
+
+
+## Gemini Flash - Call Example for testing key (call happens inside vercel sdk):
+https://ai.google.dev/gemini-api/docs/api-key
+
+```bash
+curl "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent" \
+  -H 'Content-Type: application/json' \
+  -H 'X-goog-api-key: YOUR_API_KEY_HERE' \
+  -X POST \
+  -d '{
+    "contents": [
+      {
+        "parts": [
+          {
+            "text": "Explain how AI works in a few words"
+          }
+        ]
+      }
+    ]
+  }'
+```
+
+use curl.exe (not the curl alias) and put JSON bodies in a file with -d "@file.json" to avoid quoting pain.
+```powershell
+\$key = "YOUR_API_KEY_HERE"
+
+\$body = '{
+  "contents": [
+    {
+      "parts": [
+        {
+          "text": "Explain how AI works in a few words"
+        }
+      ]
+    }
+  ]
+}'
+
+try { 
+    \$r = Invoke-RestMethod `
+        -Uri "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent" `
+        -Method POST `
+        -Headers @{ "x-goog-api-key" = \$key } `
+        -ContentType "application/json" `
+        -Body \$body
+        
+    Write-Host "SUCCESS:"
+    \$r | ConvertTo-Json -Depth 8 
+} catch { 
+    Write-Host "HTTP STATUS:" \$_.Exception.Response.StatusCode.value__
+    \(reader = [System.IO.StreamReader]::new(\)_.Exception.Response.GetResponseStream())
+    Write-Host "BODY:"
+    \$reader.ReadToEnd() 
+}
+```
+
+```powershell
+curl.exe -s "https://generativelanguage.googleapis.com/v1beta/models" -H "x-goog-api-key: YOUR_API_KEY_HERE"
+
+curl.exe -s `
+  -w "`nHTTP_STATUS:%{http_code}`n" `
+  "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent" `
+  -H "Content-Type: application/json" `
+  -H "x-goog-api-key: YOUR_API_KEY_HERE" `
+  -X POST `
+  -d "@.tmp-gemini-test.json"
+```
