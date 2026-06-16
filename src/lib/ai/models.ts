@@ -100,7 +100,7 @@ function buildReasoningProviderOptions(
         google: {
           thinkingConfig: {
             thinkingLevel: 'high',
-            includeThoughts: false,
+            includeThoughts: true,
           },
         },
       };

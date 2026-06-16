@@ -174,7 +174,7 @@ assessment
  4. REQUEST PROMPT ───────────────► assessmentPrompt(assessment)
        │
        ▼
- 5. AGENT TOOL-LOOP ──────────────► Up to 10 steps; exercise library + math tools
+ 5. AGENT TOOL-LOOP ──────────────► Up to 12 steps; exercise library + math tools
        │
        ▼
  6. POST-VALIDATION ──────────────► validateCoachPlanDomain(plan)
@@ -201,9 +201,9 @@ Agent tools: `searchExerciseLibrary`, `estimateTrainingLoad`, `estimateNutrition
 
 Both agents use AI SDK [`ToolLoopAgent`](https://ai-sdk.dev/docs/reference/ai-sdk-core/tool-loop-agent).
 
-- **chat agent** (`/ask`, `/chat`): static instructions, built once, reused; up to 8 tool-loop steps.
+- **chat agent** (`/ask`, `/chat`): static instructions, built once, reused; up to 10 tool-loop steps.
 - **plan agent** (`/plan`): built per-request because deterministic safety flags
-  are injected into its instructions; `Output.object` schema + up to 10 steps.
+  are injected into its instructions; `Output.object` schema + up to 12 steps.
   Both share the same toolset.
 
 ## Design rules (carried through the whole project)

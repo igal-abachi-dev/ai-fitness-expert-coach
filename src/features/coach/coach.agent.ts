@@ -7,6 +7,15 @@ import { createCoachTools, type ToolDeps } from './tools/index.js';
 
 const CHAT_TEMPERATURE = 0.3;
 const PLAN_TEMPERATURE = 0.2;
+/** /ask + /chat: 1 text turn or a few tool rounds; cap runaway loops. */
+const CHAT_MAX_STEPS = 10;
+/** /plan: nutrition + load + library lookups + structured output (up to 7 training days). */
+const PLAN_MAX_STEPS = 12;
+/*
+use PLAN_MAX_STEPS=14
+only needed if you see plans truncating at 12 in logs (e.g. 6–7 day splits with per-pattern library searches). Start at 12; bump to 14 only if you measure truncation. 
+*/
+
 
 export interface CoachAgentDeps extends ToolDeps {
   model: LanguageModel;
@@ -50,7 +59,7 @@ export function createCoachChatAgent(deps: CoachAgentDeps) {
     model: deps.model,
     instructions: COACH_SYSTEM_PROMPT,
     tools: createCoachTools(deps),
-    stopWhen: stepCountIs(8),
+    stopWhen: stepCountIs(CHAT_MAX_STEPS),
     ...coachAgentCallSettings(deps, CHAT_TEMPERATURE),
   });
 }
@@ -71,7 +80,7 @@ export function createCoachPlanAgent(deps: CoachAgentDeps, safetyFlags: string[]
     instructions: buildPlanInstructions(safetyFlags),
     tools: createCoachTools(deps),
     output: Output.object({ schema: coachOutputSchema }),
-    stopWhen: stepCountIs(10),
+    stopWhen: stepCountIs(PLAN_MAX_STEPS),
     // A free-tier 429 should surface immediately so the route can overflow to
     // the cheap model, rather than the SDK backing off for ~5s first.
     maxRetries: 0,
