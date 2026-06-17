@@ -123,7 +123,10 @@ response:
 
 
 
-**Chat** — SSE stream compatible with AI SDK `useChat` (`DefaultChatTransport` → `/v1/coach/chat`):
+**Chat** — SSE stream compatible with AI SDK `useChat` (`DefaultChatTransport` → `/v1/coach/chat`).
+
+The request body is an array of AI SDK **`UIMessage`** objects (`{ id, role, parts: [{ type, text }] }`),
+*not* a flat `{ role, content }` shape:
 
 ```bash
 curl -N -X POST localhost:3000/v1/coach/chat -H 'content-type: application/json' -d '{
@@ -131,8 +134,25 @@ curl -N -X POST localhost:3000/v1/coach/chat -H 'content-type: application/json'
 }'
 ```
 
+The response is a **UI message stream** (`Content-Type: text/event-stream`), not JSON. Consume it
+with the AI SDK (`useChat` / `DefaultChatTransport`) or `curl -N` — Swagger's "Try it out" can send the
+request but cannot render the streamed `text/event-stream` body, so use it only for the JSON endpoints
+(`/plan`, `/ask`).
+
 Set `CORS_ORIGIN` to your Vite dev server (e.g. `http://localhost:5173`) so the
 browser can reach `/v1/coach/chat`.
+
+in frontend:
+```typescript
+import { useChat } from '@ai-sdk/react';
+import { DefaultChatTransport } from 'ai';
+
+const { messages, sendMessage } = useChat({
+  transport: new DefaultChatTransport({
+    api: 'http://localhost:3000/v1/coach/chat',
+  }),
+});
+```
 
 ## Structure
 

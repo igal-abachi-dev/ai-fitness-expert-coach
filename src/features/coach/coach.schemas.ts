@@ -136,7 +136,48 @@ export const askResponseSchema = z.object({
   }),
 });
 
-/** POST /v1/coach/chat — streaming chat envelope (UIMessages, deep-validated by the SDK). */
-export const chatRequestSchema = z.object({
-  messages: z.array(z.looseObject({})).min(1).max(200),
+/**
+ * A single part of a UIMessage (text / reasoning / tool / file / ...).
+ *
+ * Loose on purpose: the AI SDK supports many part shapes and is the authoritative
+ * validator (`validateUIMessages`). We only document the common `text` part so
+ * Swagger renders a usable example instead of the generic `additionalProp` blob.
+ */
+const uiMessagePartSchema = z.looseObject({
+  type: z.string().describe('Part type, e.g. "text".'),
+  text: z.string().optional().describe('Present for text parts.'),
 });
+
+/**
+ * A Vercel AI SDK `UIMessage` (the `useChat` wire shape).
+ *
+ * Loose so SDK-specific fields (metadata, tool state, etc.) pass straight through
+ * to `validateUIMessages`; the declared fields exist purely for documentation.
+ */
+const uiMessageSchema = z.looseObject({
+  id: z.string().optional().describe('Client-generated message id.'),
+  role: z.enum(['system', 'user', 'assistant']),
+  parts: z.array(uiMessagePartSchema).min(1),
+});
+
+/**
+ * POST /v1/coach/chat — streaming chat envelope (UIMessages, deep-validated by the SDK).
+ *
+ * Response is a UI message stream (`Content-Type: text/event-stream`), not JSON —
+ * consume it with the AI SDK `useChat` / `DefaultChatTransport`, not Swagger.
+ */
+export const chatRequestSchema = z
+  .object({
+    messages: z.array(uiMessageSchema).min(1).max(200),
+  })
+  .meta({
+    example: {
+      messages: [
+        {
+          id: 'm1',
+          role: 'user',
+          parts: [{ type: 'text', text: 'Hi, what exercise should I do today?' }],
+        },
+      ],
+    },
+  });
