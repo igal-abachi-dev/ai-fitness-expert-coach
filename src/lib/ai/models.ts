@@ -200,7 +200,10 @@ export function callSettingsFor(
 ): AgentCallSettings {
   if (isReasoningModel(modelId, provider)) {
     return {
-      supportsTemperature: provider === 'google',
+      // Reasoning models (incl. Gemini 3.x) are tuned for their default
+      // temperature; Google explicitly warns that lowering it can cause
+      // looping/degraded reasoning. Control depth via providerOptions instead.
+      supportsTemperature: false,
       providerOptions: buildReasoningProviderOptions(provider, modelId, role),
     };
   }

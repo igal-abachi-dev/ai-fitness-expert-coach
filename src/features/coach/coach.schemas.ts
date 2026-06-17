@@ -112,6 +112,13 @@ export const coachOutputSchema = z.object({
 });
 export type CoachOutput = z.infer<typeof coachOutputSchema>;
 
+/** POST /v1/coach/plan — structured plan plus optional reasoning metadata. */
+export const planResponseSchema = z.object({
+  ...coachOutputSchema.shape,
+  reasoningText: z.string().optional(),
+  reasoningTokens: z.number().int().nullable().optional(),
+});
+
 /** POST /v1/coach/ask — one-shot question, optionally with profile context. */
 export const askRequestSchema = z.object({
   prompt: z.string().min(1).max(8_000),
@@ -121,9 +128,11 @@ export const askRequestSchema = z.object({
 export const askResponseSchema = z.object({
   text: z.string(),
   steps: z.number().int(),
+  reasoningText: z.string().optional(),
   usage: z.object({
     inputTokens: z.number().nullable(),
     outputTokens: z.number().nullable(),
+    reasoningTokens: z.number().int().nullable().optional(),
   }),
 });
 

@@ -20,7 +20,7 @@ import {
   askRequestSchema,
   askResponseSchema,
   chatRequestSchema,
-  coachOutputSchema,
+  planResponseSchema,
   userAssessmentSchema,
   type CoachOutput,
   type UserAssessment,
@@ -43,6 +43,38 @@ function assessmentPrompt(a: UserAssessment, repairIssues?: string[]): string {
   if (!repairIssues?.length) return base;
   return `${base}\n\nYour previous plan failed these domain checks. Fix every one and regenerate the full plan:\n${repairIssues.map((i) => `- ${i}`).join('\n')}`;
 }
+
+interface AgentGenerateResult {
+  reasoningText: string | undefined;
+  totalUsage: {
+    outputTokenDetails?: { reasoningTokens?: number | undefined } | undefined;
+  };
+}
+
+/** Omits reasoning fields when the provider did not return them. */
+function pickOptionalReasoning(meta: {
+  reasoningText?: string | undefined;
+  reasoningTokens?: number | undefined;
+}): { reasoningText?: string; reasoningTokens?: number } {
+  const fields: { reasoningText?: string; reasoningTokens?: number } = {};
+  if (meta.reasoningText) {
+    fields.reasoningText = meta.reasoningText;
+  }
+  if (meta.reasoningTokens != null) {
+    fields.reasoningTokens = meta.reasoningTokens;
+  }
+  return fields;
+}
+
+function optionalReasoningFields(result: AgentGenerateResult): {
+  reasoningText?: string;
+  reasoningTokens?: number;
+} {
+  return pickOptionalReasoning({
+    reasoningText: result.reasoningText,
+    reasoningTokens: result.totalUsage.outputTokenDetails?.reasoningTokens,
+  });
+}
 //Add auth/API-key protection before making expensive agent endpoints public.
 export function coachRoutes(deps: CoachRoutesDeps): FastifyPluginAsyncZod {
   return async (app) => {
@@ -57,7 +89,7 @@ export function coachRoutes(deps: CoachRoutesDeps): FastifyPluginAsyncZod {
         schema: {
           body: userAssessmentSchema,
           response: {
-            200: coachOutputSchema,
+            200: planResponseSchema,
             502: z.object({ error: z.string(), issues: z.array(z.string()) }),
           },
         },
@@ -74,15 +106,24 @@ export function coachRoutes(deps: CoachRoutesDeps): FastifyPluginAsyncZod {
           flags,
         );
 
+        interface PlanGenerateResult {
+          output: CoachOutput;
+          reasoningText?: string;
+          reasoningTokens?: number;
+        }
+
         const generateWith = async (
           agent: ReturnType<typeof createCoachPlanAgent>,
           repairIssues?: string[],
-        ): Promise<CoachOutput> => {
+        ): Promise<PlanGenerateResult> => {
           const result = await agent.generate({
             prompt: assessmentPrompt(assessment, repairIssues),
             abortSignal: signal,
           });
-          return result.output;
+          return {
+            output: result.output,
+            ...optionalReasoningFields(result),
+          };
         };
 
         // Quality-first: run the best free model; on a free-tier 429 overflow
@@ -90,7 +131,7 @@ export function coachRoutes(deps: CoachRoutesDeps): FastifyPluginAsyncZod {
         let cheapAgent: ReturnType<typeof createCoachPlanAgent> | undefined;
         const generate = async (
           repairIssues?: string[],
-        ): Promise<CoachOutput> => {
+        ): Promise<PlanGenerateResult> => {
           try {
             return await generateWith(qualityAgent, repairIssues);
           } catch (error) {
@@ -106,13 +147,15 @@ export function coachRoutes(deps: CoachRoutesDeps): FastifyPluginAsyncZod {
 
         try {
           // 2. First pass.
-          let plan = await generate();
+          let planResult = await generate();
+          let plan = planResult.output;
           let issues = validateCoachPlanDomain(plan, assessment);
 
           // 3. One repair attempt if domain-invalid.
           if (issues.length > 0) {
             request.log.warn({ issues }, 'plan failed domain checks, repairing');
-            plan = await generate(issues);
+            planResult = await generate(issues);
+            plan = planResult.output;
             issues = validateCoachPlanDomain(plan, assessment);
           }
 
@@ -124,7 +167,7 @@ export function coachRoutes(deps: CoachRoutesDeps): FastifyPluginAsyncZod {
               .send({ error: 'Could not produce a valid plan.', issues });
           }
 
-          return plan;
+          return { ...planResult.output, ...pickOptionalReasoning(planResult) };
         } catch (error) {
           if (NoOutputGeneratedError.isInstance(error)) {
             request.log.warn({ err: error }, 'model produced no schema-valid output');
@@ -153,12 +196,18 @@ export function coachRoutes(deps: CoachRoutesDeps): FastifyPluginAsyncZod {
           abortSignal: abortOnClientDisconnect(reply),
         });
 
+        const reasoning = optionalReasoningFields(result);
+
         return {
           text: result.text,
           steps: result.steps.length,
+          ...(reasoning.reasoningText ? { reasoningText: reasoning.reasoningText } : {}),
           usage: {
             inputTokens: result.totalUsage.inputTokens ?? null,
             outputTokens: result.totalUsage.outputTokens ?? null,
+            ...(reasoning.reasoningTokens != null
+              ? { reasoningTokens: reasoning.reasoningTokens }
+              : {}),
           },
         };
       },
