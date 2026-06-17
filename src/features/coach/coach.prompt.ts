@@ -67,11 +67,23 @@ Important:
 
 const PLAN_TASK = `Task: produce the complete structured coaching plan for the assessment you receive.
 - One entry in trainingProgram.weeklyLayout per requested training day.
-- Verify every exercise against the exercise library before including it; respect available equipment.
-- Compute calories/macros with the nutrition tools and working loads with the training-load tool.
+- Verify exercises against the exercise library; respect available equipment.
+- Compute calories/macros with the nutrition tool and working loads with the training-load tool when applicable.
 - Populate gymnasticsAndSkillWork when the goal involves gymnastics skills; otherwise null.
 - Provide evidenceCitations grounded in the core literature.
-- Conform exactly to the requested output schema.`;
+- Conform exactly to the requested output schema.
+
+Per-session exercise coverage (weekly volume must be carried by however many days are requested):
+- Lower frequency means each session carries MORE of the weekly load — scale exercises per session INVERSELY to frequency, never the reverse.
+- Suggested exercises per session: 1 day/week → 5-9; 2 days → 5-8; 3 days → 4-7; 4+ days → 3-6.
+- At low frequency (1-2 days), each full-body session should cover the major trainable movement patterns it reasonably can: squat, hinge, horizontal push, vertical push, horizontal pull, vertical pull, plus core/carry — not just a few big lifts.
+- Respect recovery and the user's goal/experience: prioritize compounds, keep total hard sets sustainable, and never pad volume to the point of overtraining.
+
+Tool budget (leave room for the structured plan output — do not exhaust steps on tools):
+- estimateNutrition: call once at the start.
+- searchExerciseLibrary: one call with the user's full equipment list and no pattern filter; do not search pattern-by-pattern.
+- estimateTrainingLoad: at most once, and only if the assessment includes a recent weight×reps anchor; otherwise prescribe by RIR/RPE without invented kg.
+- After the minimum tool calls above, emit the complete structured plan.`;
 
 /** Builds plan instructions with deterministic safety flags injected. */
 export function buildPlanInstructions(safetyFlags: string[]): string {

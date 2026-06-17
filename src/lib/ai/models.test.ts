@@ -1,5 +1,6 @@
+import { APICallError, RetryError } from 'ai';
 import { describe, expect, it } from 'vitest';
-import { callSettingsFor } from './models.js';
+import { callSettingsFor, isOverflowEligibleError, overflowStatusCode } from './models.js';
 
 describe('callSettingsFor', () => {
   it('uses high reasoning with thought traces for quality /plan on Gemini 3', () => {
@@ -77,6 +78,35 @@ describe('callSettingsFor', () => {
     expect(low.providerOptions).toEqual({
       openai: { reasoningEffort: 'low' },
     });
+  });
+
+  it('detects overflow-eligible provider errors', () => {
+    const apiCall = (statusCode: number) =>
+      new APICallError({
+        message: 'provider error',
+        url: 'https://mock/generate',
+        requestBodyValues: {},
+        statusCode,
+        isRetryable: statusCode === 503,
+      });
+
+    expect(isOverflowEligibleError(apiCall(429))).toBe(true);
+    expect(isOverflowEligibleError(apiCall(503))).toBe(true);
+    expect(isOverflowEligibleError(apiCall(502))).toBe(true);
+    expect(isOverflowEligibleError(apiCall(504))).toBe(true);
+    expect(isOverflowEligibleError(apiCall(500))).toBe(false);
+    expect(isOverflowEligibleError(new Error('other'))).toBe(false);
+
+    expect(overflowStatusCode(apiCall(503))).toBe(503);
+    expect(
+      overflowStatusCode(
+        new RetryError({
+          message: 'failed after retries',
+          reason: 'maxRetriesExceeded',
+          errors: [apiCall(503)],
+        }),
+      ),
+    ).toBe(503);
   });
 
   it('keeps temperature for non-reasoning models', () => {

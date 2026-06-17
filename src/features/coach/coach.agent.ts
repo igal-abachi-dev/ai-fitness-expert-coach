@@ -12,11 +12,7 @@ const PLAN_TEMPERATURE = 0.2;//is good because plans should be consistent, safe,
 /** /ask + /chat: 1 text turn or a few tool rounds; cap runaway loops. */
 const CHAT_MAX_STEPS = 10;
 /** /plan: nutrition + load + library lookups + structured output (up to 7 training days). */
-const PLAN_MAX_STEPS = 12;
-/*
-use PLAN_MAX_STEPS=14
-only needed if you see plans truncating at 12 in logs (e.g. 6–7 day splits with per-pattern library searches). Start at 12; bump to 14 only if you measure truncation. 
-*/
+export const PLAN_MAX_STEPS = 16;
 
 
 export interface CoachAgentDeps extends ToolDeps {

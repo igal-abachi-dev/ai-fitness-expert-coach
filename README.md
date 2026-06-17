@@ -359,10 +359,10 @@ the configured roles, with an error naming the missing key and the role that
 needs it. Each role falls back to `AGENT_MODEL` when its own var is unset.
 
 `/plan` is quality-first with real overflow: it runs the quality model with
-`maxRetries: 0`, and on a free-tier `429` it overflows to the cheap model
-(`isRateLimitError` unwraps the SDK's `RetryError`) rather than failing the
-user. Domain-validation repair still re-prompts the same model, then `502`s if
-the plan stays invalid.
+`maxRetries: 0`, and on quota or transient provider errors (`429`, `502`,
+`503`, `504`) it overflows to the cheap model (`isOverflowEligibleError`
+unwraps the SDK's `RetryError`) rather than failing the user. Domain-validation
+repair still re-prompts the same model, then `502`s if the plan stays invalid.
 
 **Note:** `app.ts` currently wires `/chat` to `models.cheap` (same as `/ask`).
 Swap to `models.fast` in `buildApp` when you want Cerebras low-latency streaming.

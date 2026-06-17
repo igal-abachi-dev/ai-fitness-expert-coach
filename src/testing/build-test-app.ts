@@ -55,19 +55,31 @@ export function scriptedModel(...texts: string[]) {
   });
 }
 
-/** A mock whose generate call always throws a provider 429 (quota exhausted). */
-export function rateLimitedModel() {
+function providerErrorModel(statusCode: number, message: string) {
   return new MockLanguageModelV3({
     doGenerate: async () => {
       throw new APICallError({
-        message: 'rate limited',
+        message,
         url: 'https://mock/generate',
         requestBodyValues: {},
-        statusCode: 429,
-        isRetryable: false,
+        statusCode,
+        isRetryable: statusCode === 503,
       });
     },
   });
+}
+
+/** A mock whose generate call always throws a provider 429 (quota exhausted). */
+export function rateLimitedModel() {
+  return providerErrorModel(429, 'rate limited');
+}
+
+/** A mock whose generate call always throws a provider 503 (high demand). */
+export function providerUnavailableModel() {
+  return providerErrorModel(
+    503,
+    'This model is currently experiencing high demand.',
+  );
 }
 
 const testEnv = loadEnv({

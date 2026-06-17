@@ -267,19 +267,42 @@ export function createModels(env: Env): RoleModels {
   };
 }
 
+/** HTTP statuses that should trigger `/plan` quality → cheap overflow. */
+const OVERFLOW_STATUS_CODES = new Set([429, 502, 503, 504]);
+
+function isOverflowApiCallError(error: unknown): boolean {
+  return (
+    APICallError.isInstance(error) &&
+    error.statusCode != null &&
+    OVERFLOW_STATUS_CODES.has(error.statusCode)
+  );
+}
+
 /**
- * True when an error is (or wraps) a provider rate-limit (HTTP 429) — the
- * `/plan` overflow signal. The AI SDK wraps retried failures in a RetryError,
+ * True when an error is (or wraps) a quota or transient provider failure —
+ * the `/plan` overflow signal. Covers 429 (rate limit) and 502/503/504
+ * (unavailable / gateway). The AI SDK wraps retried failures in RetryError,
  * so we unwrap that too.
  */
-export function isRateLimitError(error: unknown): boolean {
-  if (APICallError.isInstance(error)) {
-    return error.statusCode === 429;
-  }
+export function isOverflowEligibleError(error: unknown): boolean {
+  if (isOverflowApiCallError(error)) return true;
   if (RetryError.isInstance(error)) {
-    return error.errors.some(
-      (e) => APICallError.isInstance(e) && e.statusCode === 429,
-    );
+    return error.errors.some(isOverflowApiCallError);
   }
   return false;
+}
+
+/** First overflow-eligible HTTP status on an error, for logging. */
+export function overflowStatusCode(error: unknown): number | undefined {
+  if (isOverflowApiCallError(error)) {
+    return APICallError.isInstance(error) ? error.statusCode : undefined;
+  }
+  if (RetryError.isInstance(error)) {
+    for (const e of error.errors) {
+      if (APICallError.isInstance(e) && e.statusCode != null) {
+        return e.statusCode;
+      }
+    }
+  }
+  return undefined;
 }

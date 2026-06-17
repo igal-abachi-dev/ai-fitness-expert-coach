@@ -7,12 +7,13 @@ import {
 } from 'ai';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
-import { isRateLimitError, type RoleModels } from '../../lib/ai/models.js';
+import { isOverflowEligibleError, overflowStatusCode, type RoleModels } from '../../lib/ai/models.js';
 import { abortOnClientDisconnect } from '../../lib/http/abort-on-client-disconnect.js';
 import { maxOutputTokensForAsk } from './ask-length.js';
 import {
   agentDepsFromBundle,
   createCoachPlanAgent,
+  PLAN_MAX_STEPS,
   type CoachAskAgent,
   type CoachChatAgent,
 } from './coach.agent.js';
@@ -27,6 +28,11 @@ import {
 } from './coach.schemas.js';
 import { detectSafetyFlags } from './domain/safety-flags.js';
 import { validateCoachPlanDomain } from './domain/validate-coach-plan.js';
+import {
+  diagnosePlanGenerateRun,
+  type PlanGenerateRunSnapshot,
+  type PlanModelRole,
+} from './plan-generate-diagnostics.js';
 import type { ToolDeps } from './tools/index.js';
 
 export interface CoachRoutesDeps extends ToolDeps {
@@ -110,44 +116,94 @@ export function coachRoutes(deps: CoachRoutesDeps): FastifyPluginAsyncZod {
           output: CoachOutput;
           reasoningText?: string;
           reasoningTokens?: number;
+          modelRole: PlanModelRole;
+          stepCount: number;
+          toolNames: string[];
+          finishReason: string;
         }
+
+        let overflowedFromQuality = false;
+        let overflowStatus: number | undefined;
 
         const generateWith = async (
           agent: ReturnType<typeof createCoachPlanAgent>,
+          modelRole: PlanModelRole,
           repairIssues?: string[],
         ): Promise<PlanGenerateResult> => {
           const result = await agent.generate({
             prompt: assessmentPrompt(assessment, repairIssues),
             abortSignal: signal,
           });
-          return {
-            output: result.output,
-            ...optionalReasoningFields(result),
-          };
+
+          const toolNames = [
+            ...new Set(
+              result.steps.flatMap((step) => step.toolCalls.map((c) => c.toolName)),
+            ),
+          ];
+
+          try {
+            return {
+              output: result.output,
+              ...optionalReasoningFields(result),
+              modelRole,
+              stepCount: result.steps.length,
+              toolNames,
+              finishReason: result.finishReason,
+            };
+          } catch (error) {
+            if (!NoOutputGeneratedError.isInstance(error)) throw error;
+
+            const snapshot: PlanGenerateRunSnapshot = {
+              steps: result.steps,
+              finishReason: result.finishReason,
+              text: result.text,
+              totalUsage: result.totalUsage,
+              ...(result.warnings !== undefined ? { warnings: result.warnings } : {}),
+            };
+            const diagnostics = diagnosePlanGenerateRun(snapshot, {
+              modelRole,
+              overflowedFromQuality: overflowedFromQuality && modelRole === 'cheap',
+              repairAttempt: repairIssues != null && repairIssues.length > 0,
+              ...(overflowStatus !== undefined
+                ? { overflowStatusCode: overflowStatus }
+                : {}),
+            });
+            request.log.warn(
+              { planGenerate: diagnostics },
+              'model produced no schema-valid output',
+            );
+            throw error;
+          }
         };
 
-        // Quality-first: run the best free model; on a free-tier 429 overflow
-        // to the cheap model (built lazily) instead of failing the user.
+        // Quality-first: run the best model; on quota or transient provider
+        // errors (429/502/503/504) overflow to the cheap model (built lazily).
         let cheapAgent: ReturnType<typeof createCoachPlanAgent> | undefined;
         const generate = async (
           repairIssues?: string[],
         ): Promise<PlanGenerateResult> => {
           try {
-            return await generateWith(qualityAgent, repairIssues);
+            return await generateWith(qualityAgent, 'quality', repairIssues);
           } catch (error) {
-            if (!isRateLimitError(error)) throw error;
-            request.log.warn('quality model rate-limited, overflowing to cheap');
+            if (!isOverflowEligibleError(error)) throw error;
+            overflowedFromQuality = true;
+            overflowStatus = overflowStatusCode(error);
+            request.log.warn(
+              { overflowStatusCode: overflowStatus },
+              'quality model unavailable, overflowing to cheap',
+            );
             cheapAgent ??= createCoachPlanAgent(
               agentDepsFromBundle(deps.models.cheap, tools),
               flags,
             );
-            return generateWith(cheapAgent, repairIssues);
+            return generateWith(cheapAgent, 'cheap', repairIssues);
           }
         };
 
         try {
           // 2. First pass.
-          let planResult = await generate();
+          const firstPassResult = await generate();
+          let planResult = firstPassResult;
           let plan = planResult.output;
           let issues = validateCoachPlanDomain(plan, assessment);
 
@@ -167,10 +223,27 @@ export function coachRoutes(deps: CoachRoutesDeps): FastifyPluginAsyncZod {
               .send({ error: 'Could not produce a valid plan.', issues });
           }
 
+          request.log.info(
+            {
+              planGenerate: {
+                modelRole: planResult.modelRole,
+                overflowedFromQuality,
+                ...(overflowStatus !== undefined
+                  ? { overflowStatusCode: overflowStatus }
+                  : {}),
+                stepCount: planResult.stepCount,
+                maxSteps: PLAN_MAX_STEPS,
+                toolNames: planResult.toolNames,
+                finishReason: planResult.finishReason,
+                repaired: planResult !== firstPassResult,
+              },
+            },
+            'plan generated',
+          );
+
           return { ...planResult.output, ...pickOptionalReasoning(planResult) };
         } catch (error) {
           if (NoOutputGeneratedError.isInstance(error)) {
-            request.log.warn({ err: error }, 'model produced no schema-valid output');
             return reply
               .code(502)
               .send({ error: 'Plan generation failed, please retry.', issues: [] });
