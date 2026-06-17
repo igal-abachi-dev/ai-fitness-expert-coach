@@ -134,15 +134,37 @@ curl -N -X POST localhost:3000/v1/coach/chat -H 'content-type: application/json'
 }'
 ```
 
+**System prompt & context** — `/chat` already uses the full coach system prompt (`COACH_SYSTEM_PROMPT` in
+`coach.agent.ts`). There is no separate `profile` field like `/ask`; context is **multi-turn** via the
+`messages` array (send prior user/assistant turns on each request). With little or no context, the coach
+will ask clarifying questions before prescribing — that is intentional. For a one-shot concise answer with
+optional profile, use `/ask` instead.
+
+**Verbosity** — `/chat` is conversational and thorough by default. `/ask` adds brevity rules and a token cap.
+If you want shorter `/chat` replies, say so in the message (e.g. "one sentence") or add chat-specific
+instructions in `coach.prompt.ts`.
+
 The response is a **UI message stream** (`Content-Type: text/event-stream`), not JSON. Consume it
 with the AI SDK (`useChat` / `DefaultChatTransport`) or `curl -N` — Swagger's "Try it out" can send the
 request but cannot render the streamed `text/event-stream` body, so use it only for the JSON endpoints
 (`/plan`, `/ask`).
 
+**SSE event sequence** (AI SDK UI message stream protocol):
+
+```
+start → start-step → reasoning-start / reasoning-delta / reasoning-end (if the model emits reasoning)
+  → text-start → text-delta … → text-end → finish-step → finish → [DONE]
+```
+
+- `text-delta` chunks are the visible answer; `reasoning-delta` is internal chain-of-thought (some models only).
+- `finish` includes `finishReason` (e.g. `"stop"` = completed normally).
+- Tool calls appear as additional event types (`tool-input-start`, `tool-output-available`, etc.) when the agent uses tools.
+
 Set `CORS_ORIGIN` to your Vite dev server (e.g. `http://localhost:5173`) so the
 browser can reach `/v1/coach/chat`.
 
-in frontend:
+**Frontend:**
+
 ```typescript
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
