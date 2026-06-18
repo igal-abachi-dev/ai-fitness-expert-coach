@@ -130,7 +130,7 @@ The request body is an array of AI SDK **`UIMessage`** objects (`{ id, role, par
 
 ```bash
 curl -N -X POST localhost:3000/v1/coach/chat -H 'content-type: application/json' -d '{
-  "messages": [{ "id": "1", "role": "user", "parts": [{ "type": "text", "text": "What is RPE?" }] }]
+  "messages": [{ "id": "1", "role": "user", "parts": [{ "type": "text", "text": "Hi, what the top 5 barbell squats? ,rank by emg/activation/efficiency" }] }]
 }'
 ```
 
