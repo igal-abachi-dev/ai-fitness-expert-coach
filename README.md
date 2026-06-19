@@ -12,7 +12,7 @@ persistent memory, optional Neon/Postgres profiles.
 
 Verified against: `ai@6.0.x`, `fastify@5.8.x`, `zod@4.x`,
 `fastify-type-provider-zod@6.x`, `@fastify/helmet@13`, `@fastify/cors@11`,
-`@fastify/rate-limit@11`, `@fastify/swagger@9`, Node 22. Typecheck + 29 tests
+`@fastify/rate-limit@11`, `@fastify/swagger@9`, Node 22. Typecheck + 36 tests
 pass; `npm ci` + build smoke-tested.
 
 ## Quick start
@@ -29,6 +29,10 @@ with `package.json`).
 Server listens on `http://localhost:3000` by default.
 
 `npm test` · `npm run typecheck` · `npm run build && npm start`
+
+Database (optional, Drizzle + Neon): `npm run db:generate` · `npm run db:migrate` ·
+`npm run db:push` · `npm run db:studio` — requires `DATABASE_URL_UNPOOLED` (or
+`DATABASE_URL`) in `.env`.
 
 OpenAPI UI: `http://localhost:3000/documentation` (JSON at `/documentation/json`).
 
@@ -57,6 +61,8 @@ configured model roles are required.
 | `AGENT_MODEL` | `google/gemini-3-flash-preview` | Per-role fallback when a role var is unset |
 | `CORS_ORIGIN` | `http://localhost:5173` | Frontend origin; `*` is rejected in production |
 | `RATE_LIMIT_MAX` | `30` | Coach requests per IP per minute (`/health` is unlimited) |
+| `DATABASE_URL` | — | Neon pooled Postgres URL for runtime Drizzle queries (optional until persistence is wired in) |
+| `DATABASE_URL_UNPOOLED` | — | Direct (non-pooled) URL for `drizzle-kit` migrations |
 
 ## Endpoints
 
@@ -71,7 +77,9 @@ POST /v1/coach/chat         streaming chat (UI message stream / SSE, useChat-rea
 
 ### Examples
 
-**Plan** — full assessment schema in `src/features/coach/coach.schemas.ts`:
+**Plan** — full assessment schema in `src/features/coach/coach.schemas.ts`. The
+200 response is the structured plan plus optional `reasoningText` and
+`reasoningTokens` when the model emits them:
 
 ```bash
 curl -X POST localhost:3000/v1/coach/plan -H 'content-type: application/json' -d '{
@@ -82,8 +90,11 @@ curl -X POST localhost:3000/v1/coach/plan -H 'content-type: application/json' -d
 ```
 
 **Ask** — optional `profile` is a partial assessment for context; response includes
-`text`, tool-loop `steps`, and token `usage`. Prompts with brevity keywords
-(`one sentence`, `brief`, `short`, etc.) get a tighter output cap (600 vs 1500 tokens).
+`text`, tool-loop `steps`, token `usage`, and optional `reasoningText` /
+`reasoningTokens` when the model emits them. Uses `ASK_COACH_INSTRUCTIONS`
+(concise-by-default on top of `COACH_SYSTEM_PROMPT`). Prompts with brevity
+keywords (`one sentence`, `brief`, `short`, etc.) get a tighter output cap
+(600 vs 1900 tokens — see `ask-length.ts`).
 
 ```bash
 curl -X 'POST' \
@@ -114,9 +125,11 @@ response:
 {
   "text": "A effective squat warm-up ...",
   "steps": 2,
+  "reasoningText": "...",
   "usage": {
     "inputTokens": 3659,
-    "outputTokens": 1704
+    "outputTokens": 1704,
+    "reasoningTokens": 412
   }
 }
 ```
@@ -140,9 +153,11 @@ curl -N -X POST localhost:3000/v1/coach/chat -H 'content-type: application/json'
 will ask clarifying questions before prescribing — that is intentional. For a one-shot concise answer with
 optional profile, use `/ask` instead.
 
-**Verbosity** — `/chat` is conversational and thorough by default. `/ask` adds brevity rules and a token cap.
-If you want shorter `/chat` replies, say so in the message (e.g. "one sentence") or add chat-specific
-instructions in `coach.prompt.ts`.
+**Verbosity** — `/chat` is conversational and thorough by default (`COACH_SYSTEM_PROMPT`).
+`/ask` uses `ASK_COACH_INSTRUCTIONS` for brevity rules plus a per-request token cap
+(`maxOutputTokensForAsk` in `ask-length.ts`). If you want shorter `/chat` replies,
+say so in the message (e.g. "one sentence") or add chat-specific instructions in
+`coach.prompt.ts`.
 
 The response is a **UI message stream** (`Content-Type: text/event-stream`), not JSON. Consume it
 with the AI SDK (`useChat` / `DefaultChatTransport`) or `curl -N` — Swagger's "Try it out" can send the
@@ -187,14 +202,20 @@ src/
 │   ├── ai/
 │   │   ├── models.ts               only place a concrete provider is built
 │   │   └── provider-spec.ts        "<provider>/<modelId>" parsing + key mapping
+│   ├── db/                         Drizzle + Neon client (schema stub; not wired to routes yet)
+│   │   ├── client.ts
+│   │   ├── schema.ts
+│   │   └── index.ts
 │   └── http/abort-on-client-disconnect.ts
 └── features/
     ├── health/health.routes.ts
     └── coach/
-        ├── coach.prompt.ts         elite persona + per-request safety-flag injection
+        ├── coach.prompt.ts         COACH_SYSTEM_PROMPT + ASK_COACH_INSTRUCTIONS + plan flags
         ├── coach.agent.ts          chat agent + structured-plan agent factory
         ├── coach.schemas.ts        assessment + rich CoachOutput contract
         ├── coach.routes.ts         safety pipeline + ask + chat
+        ├── ask-length.ts           /ask output token cap from prompt intent
+        ├── plan-generate-diagnostics.ts  structured logging when plan output is empty
         ├── domain/                 PURE deterministic logic, AI-free, unit-tested
         │   ├── nutrition.ts        Mifflin-St Jeor, TDEE, protein range, LBM, BMI
         │   ├── training-load.ts    Epley 1RM + working loads
@@ -205,6 +226,7 @@ src/
             ├── estimate-training-load.tool.ts
             ├── estimate-nutrition.tool.ts
             └── index.ts
+drizzle.config.ts                 drizzle-kit migrations (uses DATABASE_URL_UNPOOLED)
 ```
 
 ## Agent vs chatbot
@@ -248,7 +270,7 @@ assessment
  4. REQUEST PROMPT ───────────────► assessmentPrompt(assessment)
        │
        ▼
- 5. AGENT TOOL-LOOP ──────────────► Up to 12 steps; exercise library + math tools
+ 5. AGENT TOOL-LOOP ──────────────► Up to 16 steps; exercise library + math tools
        │
        ▼
  6. POST-VALIDATION ──────────────► validateCoachPlanDomain(plan)
@@ -275,11 +297,12 @@ Agent tools: `searchExerciseLibrary`, `estimateTrainingLoad`, `estimateNutrition
 
 Both agents use AI SDK [`ToolLoopAgent`](https://ai-sdk.dev/docs/reference/ai-sdk-core/tool-loop-agent).
 
-- **ask agent** (`/ask`): concise-by-default instructions; per-request `maxOutputTokens` (1500 default, 600 when the prompt asks for brevity).
-- **chat agent** (`/chat`): static instructions, built once, reused; up to 10 tool-loop steps.
+- **ask agent** (`/ask`): `ASK_COACH_INSTRUCTIONS` (concise-by-default); per-request
+  `maxOutputTokens` (1900 default, 600 when the prompt asks for brevity).
+- **chat agent** (`/chat`): `COACH_SYSTEM_PROMPT`, built once, reused; up to 10 tool-loop steps.
 - **plan agent** (`/plan`): built per-request because deterministic safety flags
-  are injected into its instructions; `Output.object` schema + up to 12 steps.
-  Both share the same toolset.
+  are injected into its instructions; `Output.object` schema + up to 16 steps.
+  All three share the same toolset.
 
 ## Design rules (carried through the whole project)
 
@@ -422,7 +445,7 @@ secrets in the Render dashboard.
 | --- | --- |
 | **RAG / citations** | `KnowledgeBase` interface as another tool (like `ExerciseLibrary`); swap in-memory stub for pgvector/Qdrant without touching routes |
 | **Memory** | Persistent user/session memory per [AI SDK memory](https://ai-sdk.dev/docs/agents/memory) patterns |
-| **Profiles** | Optional Neon/Postgres for long-lived user assessments and history |
+| **Profiles** | Drizzle + Neon scaffolding exists (`lib/db`, env vars, `drizzle.config.ts`); tables and route integration not wired yet |
 | **Auth** | API-key or JWT gate on `/v1/coach/*` before public exposure |
 
 ## References
