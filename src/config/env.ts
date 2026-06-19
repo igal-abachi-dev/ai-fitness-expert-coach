@@ -56,6 +56,18 @@ const envSchema = z
     CORS_ORIGIN: z.string().default('http://localhost:5173'),
     /** Agent calls are expensive — keep this tight. Per IP, per minute. */
     RATE_LIMIT_MAX: z.coerce.number().int().positive().default(30),
+
+    /**
+     * Neon pooled Postgres URL for runtime Drizzle queries (optional until
+     * persistence is wired in). Example:
+     * postgresql://user:pass@ep-xxx-pooler.region.aws.neon.tech/neondb?sslmode=require
+     */
+    DATABASE_URL: optionalApiKey,
+    /**
+     * Direct (non-pooled) URL for drizzle-kit migrations. On Neon, use the
+     * connection string without `-pooler` in the hostname.
+     */
+    DATABASE_URL_UNPOOLED: optionalApiKey,
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV === 'production' && env.CORS_ORIGIN === '*') {

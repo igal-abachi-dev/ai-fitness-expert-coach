@@ -5,8 +5,14 @@ import {
   seedExercises,
 } from './features/coach/tools/exercise-library.tool.js';
 import { createModels } from './lib/ai/models.js';
+import { createDb } from './lib/db/index.js';
 
 const env = loadEnv();
+
+/** Drizzle client when DATABASE_URL is set; inject into routes/repos as needed. */
+export const db = env.DATABASE_URL
+  ? createDb({ databaseUrl: env.DATABASE_URL })
+  : undefined;
 
 const app = buildApp({
   env,
@@ -14,6 +20,10 @@ const app = buildApp({
   // Swap for a DB-backed implementation when the catalogue grows:
   exerciseLibrary: createInMemoryExerciseLibrary(seedExercises),
 });
+
+if (db) {
+  app.log.info('PostgreSQL configured (Drizzle + Neon HTTP driver)');
+}
 
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {

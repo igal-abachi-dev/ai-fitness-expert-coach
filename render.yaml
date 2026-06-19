@@ -42,3 +42,8 @@ services:
         sync: false
       - key: CORS_ORIGIN
         sync: false
+      # Neon Postgres (pooled runtime URL + direct URL for CI migrations).
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_URL_UNPOOLED
+        sync: false
