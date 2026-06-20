@@ -434,10 +434,60 @@ Swap to `models.fast` in `buildApp` when you want Cerebras low-latency streaming
 
 ## Deploy
 
-[`render.yaml`](render.yaml) is a Render Blueprint: `npm ci && npm run build`,
-`npm start`, health check on `/health`, production env vars for model roles.
-Set `GOOGLE_GENERATIVE_AI_API_KEY`, `CEREBRAS_API_KEY`, and `CORS_ORIGIN` as
-secrets in the Render dashboard.
+Deploy to [Render](https://render.com) with the native **Node** runtime — no
+Dockerfile required. [`render.yaml`](render.yaml) is a Render Blueprint that
+runs `npm ci && npm run build`, starts with `npm start`, and probes `/health`.
+
+### What you need to do on Render
+
+1. **Push this repo** to GitHub (or GitLab/Bitbucket). Ensure `package-lock.json`
+   is committed — Render uses `npm ci` at build time.
+
+2. **Create the service** in the [Render dashboard](https://dashboard.render.com):
+   - **Recommended:** **New → Blueprint** → connect the repo. Render reads
+     `render.yaml` and creates the web service with build/start commands and
+     non-secret env vars pre-filled.
+   - **Alternative:** **New → Web Service** → connect the repo and set manually:
+     - **Runtime:** Node
+     - **Build command:** `npm ci && npm run build`
+     - **Start command:** `npm start`
+     - **Health check path:** `/health`
+
+3. **Set secrets** in **Environment → Add Secret** (Blueprint marks these
+   `sync: false`; you must enter values in the dashboard):
+
+   | Variable | Required | Notes |
+   | --- | --- | --- |
+   | `GOOGLE_GENERATIVE_AI_API_KEY` | Yes (default stack) | Needed for `QUALITY_MODEL` and `CHEAP_MODEL` |
+   | `CEREBRAS_API_KEY` | Yes (default stack) | Needed for `FAST_MODEL` |
+   | `CORS_ORIGIN` | Yes in production | Exact frontend origin, e.g. `https://your-app.vercel.app` — `*` is rejected when `NODE_ENV=production` |
+   | `GROQ_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `XAI_API_KEY` | Only if used | Set the key for each provider referenced by your model roles |
+   | `DATABASE_URL` | Optional | Neon pooled URL when persistence is wired in |
+   | `DATABASE_URL_UNPOOLED` | Optional | Direct Neon URL for `drizzle-kit migrate` in CI |
+
+   `env.ts` validates only the API keys for providers referenced by
+   `QUALITY_MODEL`, `CHEAP_MODEL`, and `FAST_MODEL` (each falls back to
+   `AGENT_MODEL`). Change model roles in the dashboard if you switch providers.
+
+4. **Confirm Node 22+.** `package.json` requires Node `>=22`. If Render picks an
+   older default, add an env var: `NODE_VERSION` = `22`.
+
+5. **Deploy.** Render sets `PORT` automatically; the app binds `0.0.0.0` via
+   `HOST`. After the first successful deploy, hit `https://<your-service>.onrender.com/health`
+   — expect `200` with a JSON body.
+
+6. **Point your frontend** at the Render URL and ensure `CORS_ORIGIN` matches
+   that frontend's origin exactly (scheme + host + port).
+
+No `.env` file is needed on Render — platform env vars are injected at runtime
+(`npm start` uses `--env-file-if-exists=.env`, which is a no-op when the file
+is absent).
+
+### Docker
+
+Not required for Render. The Blueprint uses Render's built-in Node builder,
+which is simpler and matches this project (`tsc` → `dist/`, not `build/`).
+Use a Dockerfile only if you need a custom OS image or system packages.
 
 ## Next (kept behind interfaces, not built yet)
 
