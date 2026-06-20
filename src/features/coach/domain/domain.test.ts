@@ -67,4 +67,24 @@ describe('safety flags', () => {
     const flags = detectSafetyFlags({ ...base, experienceLevel: 'beginner', trainingDaysPerWeek: 6 });
     expect(flags.some((f) => /overreach/.test(f))).toBe(true);
   });
+  it('flags gymnastics athletes 35+ for connective tissue care', () => {
+    const flags = detectSafetyFlags({
+      ...base,
+      age: 38,
+      primaryGoal: 'gymnastics_skills',
+      equipment: ['bodyweight', 'rings'],
+      experienceLevel: 'advanced',
+    });
+    expect(flags.some((f) => /connective tissue/.test(f))).toBe(true);
+    expect(flags.some((f) => /deload/.test(f))).toBe(true);
+  });
+  it('does not flag gymnastics goal for younger adults', () => {
+    const flags = detectSafetyFlags({
+      ...base,
+      age: 30,
+      primaryGoal: 'gymnastics_skills',
+      equipment: ['bodyweight', 'rings'],
+    });
+    expect(flags.some((f) => /connective tissue/.test(f))).toBe(false);
+  });
 });

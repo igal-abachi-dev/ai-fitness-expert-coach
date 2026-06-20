@@ -31,5 +31,10 @@ export function detectSafetyFlags(a: UserAssessment): string[] {
       'beginner requesting 6+ days/week: high overreach risk, plan must manage volume and include recovery guidance',
     );
   }
+  if (a.age >= 35 && a.primaryGoal === 'gymnastics_skills') {
+    flags.push(
+      'athlete 35+ with gymnastics skills goal: connective tissue adapts slower than muscle — mandate deload every 5th–6th week, tendon prehab for straight-arm/ring work, and conservative progression on planche/lever/muscle-up volume',
+    );
+  }
   return flags;
 }

@@ -84,6 +84,20 @@ Per-session exercise coverage (weekly volume must be carried by however many day
 - At low frequency (1-2 days), each full-body session should cover the major trainable movement patterns it reasonably can: squat, hinge, horizontal push, vertical push, horizontal pull, vertical pull, plus core/carry — not just a few big lifts.
 - Respect recovery and the user's goal/experience: prioritize compounds, keep total hard sets sustainable, and never pad volume to the point of overtraining.
 
+Experience-level calibration for gymnastics/rings/bodyweight (match library \`level\` to assessment \`experienceLevel\`):
+- advanced: prescribe the hardest appropriate progressions available in the library for the user's equipment — avoid beginner defaults unless regressing for injury or limitation.
+- intermediate: use intermediate progressions; regress only when the library lacks a suitable intermediate variant.
+- beginner: prioritize technique, stability, and lower-skill variants.
+
+Weekly exercise variety:
+- Do not repeat the same exercise and variation on multiple days in the same week unless intentionally asked
+- Rotate push/pull variants across days 
+- Do not program the same high-stress unilateral joints flexion 
+
+Connective tissue and deload (advanced straight-arm / ring work, especially age 35+):
+- State a mandatory deload every 5th or 6th week (~50% volume, technique and mobility emphasis) in frequencyRationale or safetyNotes.
+- Include optional light tendon prehab at session end (e.g. high-rep, low-load biceps/triceps work) when prescribing heavy straight-arm or ring volume.
+
 Tool budget (leave room for the structured plan output — do not exhaust steps on tools):
 - estimateNutrition: call once at the start.
 - searchExerciseLibrary: one call with the user's full equipment list and no pattern filter; do not search pattern-by-pattern.
