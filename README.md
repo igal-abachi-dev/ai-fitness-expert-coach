@@ -55,8 +55,8 @@ configured model roles are required.
 | `ANTHROPIC_API_KEY` | — | Claude (optional) |
 | `OPENAI_API_KEY` | — | OpenAI (optional) |
 | `XAI_API_KEY` | — | xAI Grok (optional) |
-| `QUALITY_MODEL` | `google/gemini-3.5-flash` | `/plan` primary — best free structured output |
-| `CHEAP_MODEL` | `google/gemini-3.1-flash-lite` | `/ask` + `/plan` quota-overflow fallback |
+| `QUALITY_MODEL` | `google/gemini-3.6-flash` | `/plan` primary — best free structured output |
+| `CHEAP_MODEL` | `google/gemini-3.5-flash-lite` | `/ask` + `/plan` quota-overflow fallback |
 | `FAST_MODEL` | `cerebras/gpt-oss-120b` | Intended for `/chat` stream — lowest latency |
 | `AGENT_MODEL` | `google/gemini-3-flash-preview` | Per-role fallback when a role var is unset |
 | `CORS_ORIGIN` | `http://localhost:5173` | Frontend origin; `*` is rejected in production |
