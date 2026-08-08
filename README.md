@@ -436,7 +436,7 @@ Swap to `models.fast` in `buildApp` when you want Cerebras low-latency streaming
 
 Deploy to [Render](https://render.com) with the native **Node** runtime — no
 Dockerfile required. [`render.yaml`](render.yaml) is a Render Blueprint that
-runs `npm ci && npm run build`, starts with `npm start`, and probes `/health`.
+runs `npm ci --include=dev && npm run build`, starts with `npm start`, and probes `/health`.
 
 ### What you need to do on Render
 
@@ -449,7 +449,7 @@ runs `npm ci && npm run build`, starts with `npm start`, and probes `/health`.
      non-secret env vars pre-filled.
    - **Alternative:** **New → Web Service** → connect the repo and set manually:
      - **Runtime:** Node
-     - **Build command:** `npm ci && npm run build`
+     - **Build command:** `npm ci --include=dev && npm run build`
      - **Start command:** `npm start`
      - **Health check path:** `/health`
 

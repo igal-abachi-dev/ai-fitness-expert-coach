@@ -5,7 +5,8 @@ services:
     name: ai-fitness-expert-coach
     runtime: node
     plan: starter
-    buildCommand: npm ci && npm run build
+    # --include=dev: NODE_ENV=production would otherwise omit typescript/@types/node
+    buildCommand: npm ci --include=dev && npm run build
     startCommand: npm start
     healthCheckPath: /health
     envVars:
