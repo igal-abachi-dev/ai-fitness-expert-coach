@@ -102,7 +102,7 @@ export function buildApp({ env, models, exerciseLibrary }: AppDeps) {
     agentDepsFromBundle(models.cheap/*models.fast*/, tools),
   );
   const askAgent = createCoachAskAgent(
-    agentDepsFromBundle(models.cheap, tools),
+    agentDepsFromBundle(models.quality, tools),
   );
 
   // Health is unlimited so platform probes (Render/Fly/Railway) are never
